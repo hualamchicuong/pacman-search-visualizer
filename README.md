@@ -8,7 +8,7 @@ State: `(x, y, foodBitmask)`. No backend — solvers run in the browser.
 
 After enabling **Settings → Pages → GitHub Actions**:
 
-**https://maitrongnhan001.github.io/pacman-search-visualizer/**
+**https://hualamchicuong.github.io/pacman-search-visualizer/**
 
 ## Local setup
 
