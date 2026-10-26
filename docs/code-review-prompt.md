@@ -40,7 +40,7 @@ Bạn là senior engineer + AI course TA. Review toàn bộ project web client-o
 ### 3. Visualization & playback
 
 - Trace/`StepEvent` có đủ để animate OPEN/CLOSED/path không? Có lệch so với search thật không?
-- Search tree: build theo exploration order, layout, fit/pan/zoom — có gây hiểu nhầm thuật toán không?
+- Search tree: build theo exploration order, layout, fit/pan/zoom — có gây hiểu nhầm thuật toán không? Cách vẽ cây đã đúng với logic của thuật toán hay chưa?
 - Smooth Pac-man/food trên canvas — timing với step có sync không?
 - Compare mode (2 panel xếp dọc) — state player có conflict không?
 
