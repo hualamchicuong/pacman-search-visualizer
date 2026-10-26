@@ -81,7 +81,7 @@ export function renderInsight(container: HTMLElement, results: SearchResult[]): 
           )
           .join('')}
       </ul>
-      <p class="insight-note">${
+      <p class="insight-verdict">${
         lean.metrics.nodesExpanded < heavy.metrics.nodesExpanded
           ? `${lean.algorithm} mở rộng ít hơn ${heavy.algorithm} (${lean.metrics.nodesExpanded} vs ${heavy.metrics.nodesExpanded}) — thường tiết kiệm hơn về thời gian/bộ nhớ khám phá.`
           : 'Các thuật toán mở rộng cùng số nút trên lần chạy này.'
@@ -111,7 +111,7 @@ export function renderInsight(container: HTMLElement, results: SearchResult[]): 
             )
             .join('')}
         </ul>
-        <p class="insight-note">${
+        <p class="insight-verdict">${
           same
             ? `Tất cả lời giải tìm được có cùng cost = ${best.metrics.pathCost} trên map này.`
             : `${worst.algorithm} dài hơn ${best.algorithm} (${worst.metrics.pathCost} vs ${best.metrics.pathCost}) — thuật toán không tối ưu có thể trả lời giải dài hơn.`
@@ -129,18 +129,18 @@ export function renderInsight(container: HTMLElement, results: SearchResult[]): 
     <div class="insight-block insight-recommend">
       <h4>3. Gợi ý thuật toán tối ưu</h4>
       <ul class="recommend-list">
-        <li><strong>BFS</strong> — tối ưu khi mọi bước có chi phí <code>c = 1</code> (ít bước nhất).</li>
-        <li><strong>UCS</strong> — tối ưu với chi phí không âm bất kỳ; khi <code>c = 1</code> tương đương BFS.</li>
-        <li><strong>A*</strong> — tối ưu nếu heuristic <em>admissible</em> (không đánh giá quá cao); thường mở rộng ít hơn BFS.</li>
-        <li><strong>DFS</strong> — <em>không</em> đảm bảo tối ưu (dễ ra path dài).</li>
-        <li><strong>Greedy</strong> — <em>không</em> đảm bảo tối ưu (chỉ theo <code>h</code>).</li>
+        <li><strong>BFS</strong> — <span class="insight-explain">tối ưu khi mọi bước có chi phí <code>c = 1</code> (ít bước nhất).</span></li>
+        <li><strong>UCS</strong> — <span class="insight-explain">tối ưu với chi phí không âm bất kỳ; khi <code>c = 1</code> tương đương BFS.</span></li>
+        <li><strong>A*</strong> — <span class="insight-explain">tối ưu nếu heuristic <em>admissible</em> (không đánh giá quá cao); thường mở rộng ít hơn BFS.</span></li>
+        <li><strong>DFS</strong> — <span class="insight-explain"><em>không</em> đảm bảo tối ưu (dễ ra path dài).</span></li>
+        <li><strong>Greedy</strong> — <span class="insight-explain"><em>không</em> đảm bảo tối ưu (chỉ theo <code>h</code>).</span></li>
       </ul>
       ${
         optimalNow
           ? `<p class="insight-pick">Trên lần chạy này, đường ngắn nhất thuộc về: <strong>${optimalNow.algorithm}</strong> (cost = ${optimalNow.metrics.pathCost}).</p>`
           : ''
       }
-      <p class="insight-note">Với bài Pac-man (<code>c = 1</code>): ưu tiên <strong>BFS</strong> hoặc <strong>A*</strong> khi cần lời giải tối ưu; dùng DFS/Greedy chỉ để minh họa trade-off.</p>
+      <p class="insight-verdict">Với bài Pac-man (<code>c = 1</code>): ưu tiên <strong>BFS</strong> hoặc <strong>A*</strong> khi cần lời giải tối ưu; dùng DFS/Greedy chỉ để minh họa trade-off.</p>
     </div>
   `)
 
@@ -185,10 +185,10 @@ function recommendBlock(current: string | null): string {
     <div class="insight-block insight-recommend">
       <h4>${current ? '3' : '2'}. Gợi ý thuật toán tối ưu</h4>
       <ul class="recommend-list">
-        <li><strong>BFS</strong> / <strong>UCS</strong> / <strong>A*</strong> (h admissible) → hướng tới path tối ưu.</li>
-        <li><strong>DFS</strong> / <strong>Greedy</strong> → có thể nhanh hoặc ít nhớ hơn, nhưng <em>không</em> đảm bảo tối ưu.</li>
+        <li><strong>BFS</strong> / <strong>UCS</strong> / <strong>A*</strong> (h admissible) → <span class="insight-explain">hướng tới path tối ưu.</span></li>
+        <li><strong>DFS</strong> / <strong>Greedy</strong> → <span class="insight-explain">có thể nhanh hoặc ít nhớ hơn, nhưng <em>không</em> đảm bảo tối ưu.</span></li>
       </ul>
-      <p class="insight-note">Pac-man với <code>c = 1</code>: chọn <strong>BFS</strong> hoặc <strong>A*</strong> khi cần lời giải ngắn nhất.</p>
+      <p class="insight-verdict">Pac-man với <code>c = 1</code>: chọn <strong>BFS</strong> hoặc <strong>A*</strong> khi cần lời giải ngắn nhất.</p>
     </div>
   `
 }

@@ -387,10 +387,13 @@ canvas {
   margin: 0.2rem 0;
 }
 
-.insight-note {
-  margin: 0.35rem 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
+.insight-note,
+.insight-verdict {
+  margin: 0.45rem 0 0;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .insight-recommend {
@@ -408,14 +411,26 @@ canvas {
   padding-left: 1.05rem;
 }
 
-.insight-pick {
-  margin: 0.5rem 0 0;
+.recommend-list li {
+  color: var(--text);
   font-weight: 600;
 }
 
+.recommend-list li .insight-explain {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.insight-pick {
+  margin: 0.5rem 0 0;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
 .insight-card {
-  max-height: min(70vh, 640px);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .tree-block {
