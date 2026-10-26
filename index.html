@@ -45,6 +45,34 @@
             <span>Map</span>
             <select id="map-select"></select>
           </label>
+
+          <div class="gen-panel" id="gen-panel">
+            <p class="toolbar-title">Generate</p>
+            <label class="field">
+              <span>Size</span>
+              <select id="gen-size">
+                <option value="tiny">tiny (7×5)</option>
+                <option value="small" selected>small (11×7)</option>
+                <option value="medium">medium (15×9)</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Foods</span>
+              <input id="gen-foods" type="number" min="1" max="20" value="4" />
+            </label>
+            <label class="field">
+              <span>Start exits</span>
+              <select id="gen-exits">
+                <option value="2">2 paths</option>
+                <option value="3">3 paths</option>
+                <option value="4" selected>4 paths</option>
+              </select>
+            </label>
+            <p class="gen-hint" id="gen-hint">Max foods: 20 (open cells − 1, cap 20)</p>
+            <button type="button" id="btn-generate" class="btn btn-block">Generate map</button>
+            <p class="gen-status" id="gen-status" hidden></p>
+          </div>
+
           <label class="field">
             <span>Mode</span>
             <select id="mode-select">

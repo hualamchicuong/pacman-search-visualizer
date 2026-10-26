@@ -127,7 +127,8 @@ h1 {
 }
 
 .field select,
-.field input[type="range"] {
+.field input[type="range"],
+.field input[type="number"] {
   font-family: var(--font);
   font-size: 0.86rem;
   color: var(--text);
@@ -139,6 +140,44 @@ h1 {
   min-width: 0;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.gen-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.55rem 0.5rem 0.65rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
+}
+
+.gen-hint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.gen-status {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.gen-status.ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.gen-status.err {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .field.speed input {

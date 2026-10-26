@@ -1,5 +1,6 @@
 import './style.css'
-import { MAPS } from './maps'
+import { getMap, setCustomMap } from './maps'
+import { generateMaze, GenerateError } from './maps/generate'
 import { solve } from './search'
 import { stateKey, type SearchResult } from './core/types'
 import { CanvasRenderer } from './viz/canvasRenderer'
@@ -39,6 +40,13 @@ const controls = bindControls((state) => {
   playerA.setSpeed(state.speed)
   playerB.setSpeed(state.speed)
   updateLayout(state.mode)
+})
+
+controls.els.mapSelect.addEventListener('change', () => {
+  lastResults = []
+  playerA.setResult(null)
+  playerB.setResult(null)
+  drawIdle()
 })
 
 function updateLayout(mode: 'single' | 'compare'): void {
@@ -108,9 +116,13 @@ function syncTree(
   tree.setHighlight(highlightId(result, player))
 }
 
+function currentMaze() {
+  return getMap(controls.get().mapId)
+}
+
 function redraw(): void {
-  const { mapId } = controls.get()
-  const maze = MAPS[mapId]
+  const maze = currentMaze()
+  if (!maze) return
   rendererA.draw(maze, playerA.getResult(), playerA.frame)
   stepA.textContent = `${playerA.frame.stepIndex + 1}/${playerA.length}`
   infoA.textContent = formatNodeInfo(playerA.getResult(), playerA)
@@ -125,7 +137,8 @@ function redraw(): void {
 }
 
 function drawIdle(): void {
-  const maze = MAPS[controls.get().mapId]
+  const maze = currentMaze()
+  if (!maze) return
   rendererA.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
   rendererB.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
   treeA.clear()
@@ -148,7 +161,7 @@ playerB.onChange(() => {
 function run(): void {
   try {
     const state = controls.get()
-    const maze = MAPS[state.mapId]
+    const maze = getMap(state.mapId)
     if (!maze) {
       insightEl.innerHTML = `<p class="insight-empty">Unknown map: ${state.mapId}</p>`
       return
@@ -188,6 +201,35 @@ function run(): void {
     console.error(err)
   }
 }
+
+controls.els.btnGenerate.addEventListener('click', () => {
+  try {
+    const form = controls.getGenerate()
+    const result = generateMaze({
+      size: form.size,
+      foodCount: form.foodCount,
+      startExits: form.startExits,
+    })
+    setCustomMap(result.maze)
+    controls.refreshMapSelect('custom')
+    controls.setGenerateStatus(
+      `OK — ${form.size}, ${result.maze.foods.length} foods, start exits=${result.startExits}, open=${result.openCells}. Press Run.`,
+      'ok',
+    )
+    lastResults = []
+    playerA.setResult(null)
+    playerB.setResult(null)
+    drawIdle()
+  } catch (err) {
+    const msg =
+      err instanceof GenerateError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err)
+    controls.setGenerateStatus(msg, 'err')
+  }
+})
 
 controls.els.btnRun.addEventListener('click', run)
 controls.els.btnPlay.addEventListener('click', () => {
