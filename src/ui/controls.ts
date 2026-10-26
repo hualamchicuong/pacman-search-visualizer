@@ -24,6 +24,7 @@ export interface GenerateFormState {
   size: MapSizeId
   foodCount: number
   startExits: 2 | 3 | 4
+  foodsAtCorners: boolean
 }
 
 function fillSelect(el: HTMLSelectElement, values: string[], selected?: string): void {
@@ -55,6 +56,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     btnGenerate: HTMLButtonElement
     genSize: HTMLSelectElement
     genFoods: HTMLInputElement
+    genCorners: HTMLInputElement
     genExits: HTMLSelectElement
     genHint: HTMLElement
     genStatus: HTMLElement
@@ -77,6 +79,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const btnGenerate = document.querySelector('#btn-generate') as HTMLButtonElement
   const genSize = document.querySelector('#gen-size') as HTMLSelectElement
   const genFoods = document.querySelector('#gen-foods') as HTMLInputElement
+  const genCorners = document.querySelector('#gen-corners') as HTMLInputElement
   const genExits = document.querySelector('#gen-exits') as HTMLSelectElement
   const genHint = document.querySelector('#gen-hint') as HTMLElement
   const genStatus = document.querySelector('#gen-status') as HTMLElement
@@ -103,8 +106,9 @@ export function bindControls(onChange?: (s: ControlState) => void): {
 
   const getGenerate = (): GenerateFormState => ({
     size: genSize.value as MapSizeId,
-    foodCount: Number(genFoods.value),
+    foodCount: genCorners.checked ? 4 : Number(genFoods.value),
     startExits: Number(genExits.value) as 2 | 3 | 4,
+    foodsAtCorners: genCorners.checked,
   })
 
   const setGenerateHint = (text: string): void => {
@@ -127,6 +131,15 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const syncFoodLimits = (): void => {
     const size = genSize.value as MapSizeId
     const max = maxFoodForSize(size)
+    const corners = genCorners.checked
+    genFoods.disabled = corners
+    if (corners) {
+      genFoods.value = '4'
+      setGenerateHint(
+        `4-corner mode: luôn đúng 4 food ở 4 góc (ô cạnh góc tường). Input Foods bị khóa — edge case thứ tự ăn / Greedy.`,
+      )
+      return
+    }
     genFoods.max = String(max)
     if (Number(genFoods.value) > max) genFoods.value = String(max)
     if (Number(genFoods.value) < 1) genFoods.value = '1'
@@ -159,6 +172,10 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     syncFoodLimits()
     setGenerateStatus('', 'clear')
   })
+  genCorners.addEventListener('change', () => {
+    syncFoodLimits()
+    setGenerateStatus('', 'clear')
+  })
   genExits.addEventListener('change', () => setGenerateStatus('', 'clear'))
 
   syncFoodLimits()
@@ -186,6 +203,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
       btnGenerate,
       genSize,
       genFoods,
+      genCorners,
       genExits,
       genHint,
       genStatus,

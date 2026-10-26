@@ -162,6 +162,30 @@ h1 {
   font-weight: 500;
 }
 
+.check-field .check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check-field input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.field input[type="number"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .gen-status {
   margin: 0;
   font-size: 0.72rem;

@@ -11,10 +11,15 @@ export const MAP_SIZES: Record<MapSizeId, { width: number; height: number; label
 
 export interface GenerateOptions {
   size: MapSizeId
-  /** Number of food pellets */
+  /** Number of food pellets (ignored when foodsAtCorners) */
   foodCount: number
   /** Open neighbors from Pac-man start (2–4) */
   startExits: 2 | 3 | 4
+  /**
+   * Place exactly 4 foods at the four interior corner cells.
+   * Forces foodCount = 4 (classic “order-of-eating” edge case).
+   */
+  foodsAtCorners?: boolean
   seed?: number
 }
 
@@ -22,6 +27,27 @@ export interface GenerateResult {
   maze: Maze
   openCells: number
   startExits: number
+  foodsAtCorners: boolean
+}
+
+/** Interior cells next to the four map corners (inside the border wall). */
+export function cornerFoodSlots(width: number, height: number): Array<{ x: number; y: number }> {
+  return [
+    { x: 1, y: 1 },
+    { x: width - 2, y: 1 },
+    { x: 1, y: height - 2 },
+    { x: width - 2, y: height - 2 },
+  ]
+}
+
+/** True when there are exactly 4 foods on the four corner slots. */
+export function hasFoodsAtFourCorners(maze: Maze): boolean {
+  if (maze.foods.length !== 4) return false
+  const want = new Set(cornerFoodSlots(maze.width, maze.height).map((c) => `${c.x},${c.y}`))
+  const have = new Set(maze.foods.map((f) => `${f.x},${f.y}`))
+  if (want.size !== 4) return false
+  for (const k of want) if (!have.has(k)) return false
+  return true
 }
 
 export class GenerateError extends Error {
@@ -134,7 +160,10 @@ function toLayout(
  * Retries until start has the requested exit count and foods are reachable.
  */
 export function generateMaze(options: GenerateOptions): GenerateResult {
-  const { size, foodCount, startExits } = options
+  const { size, startExits } = options
+  const foodsAtCorners = Boolean(options.foodsAtCorners)
+  const foodCount = foodsAtCorners ? 4 : options.foodCount
+
   if (startExits < 2 || startExits > 4) {
     throw new GenerateError('Start exits must be 2, 3, or 4.')
   }
@@ -148,21 +177,34 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
       `Food count ${foodCount} exceeds max ${maxFood} for size "${size}" (open cells − 1, cap 20).`,
     )
   }
+  if (foodsAtCorners && maxFood < 4) {
+    throw new GenerateError(`Size "${size}" is too small for 4 corner foods.`)
+  }
 
   const { width: w, height: h } = MAP_SIZES[size]
+  const corners = cornerFoodSlots(w, h)
+  const cornerKey = new Set(corners.map((c) => `${c.x},${c.y}`))
   const seed = options.seed ?? (Date.now() ^ (Math.random() * 1e9)) | 0
   const rand = mulberry32(seed)
 
-  const maxAttempts = 80
+  const maxAttempts = 100
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const walls = buildSparseWalls(w, h, rand)
+    let walls = buildSparseWalls(w, h, rand)
+
+    // Corner-food maps: force the four corner cells open
+    if (foodsAtCorners) {
+      for (const c of corners) walls[c.y]![c.x] = false
+    }
+
     const opens = openList(walls)
     if (opens.length < foodCount + 1) continue
 
     // Prefer cells that already have enough exits; carve if needed
+    // When corner foods: Pac-man must not start on a corner food cell
     const candidates = opens
       .map((c) => ({ ...c, d: degree(walls, c.x, c.y) }))
       .filter((c) => c.d >= startExits)
+      .filter((c) => !(foodsAtCorners && cornerKey.has(`${c.x},${c.y}`)))
       .sort((a, b) => Math.abs(a.d - startExits) - Math.abs(b.d - startExits))
 
     let start: { x: number; y: number } | null = null
@@ -170,7 +212,13 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
 
     for (const c of candidates) {
       const trial = cloneGrid(walls)
+      if (foodsAtCorners) {
+        for (const corner of corners) trial[corner.y]![corner.x] = false
+      }
       if (forceExits(trial, c.x, c.y, startExits, rand)) {
+        if (foodsAtCorners) {
+          for (const corner of corners) trial[corner.y]![corner.x] = false
+        }
         if (degree(trial, c.x, c.y) === startExits) {
           start = { x: c.x, y: c.y }
           working = trial
@@ -181,10 +229,18 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
 
     // Fallback: try every open cell and carve
     if (!start) {
-      const shuffled = [...opens].sort(() => rand() - 0.5)
+      const shuffled = [...opens]
+        .filter((c) => !(foodsAtCorners && cornerKey.has(`${c.x},${c.y}`)))
+        .sort(() => rand() - 0.5)
       for (const c of shuffled) {
         const trial = cloneGrid(walls)
+        if (foodsAtCorners) {
+          for (const corner of corners) trial[corner.y]![corner.x] = false
+        }
         if (forceExits(trial, c.x, c.y, startExits, rand) && degree(trial, c.x, c.y) === startExits) {
+          if (foodsAtCorners) {
+            for (const corner of corners) trial[corner.y]![corner.x] = false
+          }
           start = { x: c.x, y: c.y }
           working = trial
           break
@@ -194,22 +250,37 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
 
     if (!start) continue
 
-    const reach = reachable(working, start.x, start.y)
-    const places = [...reach]
-      .map((k) => {
-        const [x, y] = k.split(',').map(Number)
-        return { x, y }
-      })
-      .filter((c) => !(c.x === start!.x && c.y === start!.y))
-
-    if (places.length < foodCount) continue
-
-    // Shuffle place foods
-    for (let i = places.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1))
-      ;[places[i], places[j]] = [places[j]!, places[i]!]
+    // Keep corners open after start carving
+    if (foodsAtCorners) {
+      for (const c of corners) working[c.y]![c.x] = false
     }
-    const foods = places.slice(0, foodCount)
+
+    const reach = reachable(working, start.x, start.y)
+    if (foodsAtCorners) {
+      const allCornersReachable = corners.every((c) => reach.has(`${c.x},${c.y}`))
+      if (!allCornersReachable) continue
+      if (cornerKey.has(`${start.x},${start.y}`)) continue
+    }
+
+    let foods: Array<{ x: number; y: number }>
+    if (foodsAtCorners) {
+      foods = corners.map((c) => ({ ...c }))
+    } else {
+      const places = [...reach]
+        .map((k) => {
+          const [x, y] = k.split(',').map(Number)
+          return { x, y }
+        })
+        .filter((c) => !(c.x === start!.x && c.y === start!.y))
+
+      if (places.length < foodCount) continue
+
+      for (let i = places.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1))
+        ;[places[i], places[j]] = [places[j]!, places[i]!]
+      }
+      foods = places.slice(0, foodCount)
+    }
 
     const layout = toLayout(working, start, foods)
     const maze = parseMaze(`custom-${size}`, layout)
@@ -217,11 +288,14 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
       maze,
       openCells: openList(working).length,
       startExits: degree(working, start.x, start.y),
+      foodsAtCorners: foodsAtCorners && hasFoodsAtFourCorners(maze),
     }
   }
 
   throw new GenerateError(
-    `Could not generate a valid map after ${maxAttempts} tries. Try fewer foods or different start exits.`,
+    foodsAtCorners
+      ? `Could not generate a 4-corner-food map after ${maxAttempts} tries. Try another size or start exits.`
+      : `Could not generate a valid map after ${maxAttempts} tries. Try fewer foods or different start exits.`,
   )
 }
 

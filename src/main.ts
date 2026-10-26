@@ -193,7 +193,7 @@ function run(): void {
     }
 
     renderMetrics(metricsEl, lastResults)
-    renderInsight(insightEl, lastResults)
+    renderInsight(insightEl, lastResults, maze)
     redraw()
     playerA.play()
     if (state.mode === 'compare') playerB.play()
@@ -211,11 +211,13 @@ controls.els.btnGenerate.addEventListener('click', () => {
       size: form.size,
       foodCount: form.foodCount,
       startExits: form.startExits,
+      foodsAtCorners: form.foodsAtCorners,
     })
     setCustomMap(result.maze)
     controls.refreshMapSelect('custom')
+    const cornerNote = result.foodsAtCorners ? ', foods@4-corners' : ''
     controls.setGenerateStatus(
-      `OK — ${form.size}, ${result.maze.foods.length} foods, start exits=${result.startExits}, open=${result.openCells}. Press Run.`,
+      `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}. Press Run.`,
       'ok',
     )
     lastResults = []
