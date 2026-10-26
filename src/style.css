@@ -58,21 +58,11 @@ body {
 .brand-mark {
   width: 42px;
   height: 42px;
+  flex-shrink: 0;
+  display: block;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffe566, var(--accent) 55%, var(--accent-dim));
   box-shadow: 0 0 0 3px #2a2210, 0 8px 24px rgba(240, 180, 41, 0.25);
-  position: relative;
-}
-
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  right: 6px;
-  top: 16px;
-  width: 14px;
-  height: 10px;
-  background: var(--bg);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  background: #1a1508;
 }
 
 h1 {
@@ -210,10 +200,25 @@ h1 {
   min-width: 0;
 }
 
+.stage-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
 .panels {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
+}
+
+.metrics-bar {
+  min-height: 7.5rem;
+}
+
+.metrics-bar #metrics-table {
+  max-height: none;
 }
 
 /* Compare: stack algorithm panels vertically (top / bottom) */

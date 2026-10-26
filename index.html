@@ -15,7 +15,21 @@
     <div id="app">
       <header class="app-header">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
+          <svg
+            class="brand-mark"
+            viewBox="0 0 48 48"
+            width="42"
+            height="42"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <!-- Classic Pac-man facing right: wedge mouth + eye -->
+            <path
+              fill="#ffd60a"
+              d="M24 24 L39.32 11.14 A20 20 0 1 0 39.32 36.86 Z"
+            />
+            <circle cx="28" cy="15" r="2.5" fill="#0f1419" />
+          </svg>
           <div>
             <h1>Pac-man Search</h1>
             <p class="tagline">State-space search · Uninformed &amp; Informed</p>
@@ -70,52 +84,55 @@
         </aside>
 
         <main class="stage">
-          <div class="panels" id="panels">
-            <div class="panel" id="panel-a">
-              <div class="panel-head">
-                <h2 id="panel-a-title">BFS</h2>
-                <span class="step-label" id="panel-a-step">—</span>
-              </div>
-              <div class="panel-split">
-                <div class="maze-col">
-                  <canvas id="canvas-a" width="480" height="400"></canvas>
-                  <p class="node-info" id="panel-a-info">Run an algorithm to begin.</p>
+          <div class="stage-main">
+            <div class="panels" id="panels">
+              <div class="panel" id="panel-a">
+                <div class="panel-head">
+                  <h2 id="panel-a-title">BFS</h2>
+                  <span class="step-label" id="panel-a-step">—</span>
                 </div>
-                <div class="tree-block">
-                  <div class="panel-head">
-                    <h2>Search tree</h2>
+                <div class="panel-split">
+                  <div class="maze-col">
+                    <canvas id="canvas-a" width="480" height="400"></canvas>
+                    <p class="node-info" id="panel-a-info">Run an algorithm to begin.</p>
                   </div>
-                  <div class="tree-viewport" id="tree-a"></div>
-                  <p class="tree-caption" id="tree-a-caption"></p>
+                  <div class="tree-block">
+                    <div class="panel-head">
+                      <h2>Search tree</h2>
+                    </div>
+                    <div class="tree-viewport" id="tree-a"></div>
+                    <p class="tree-caption" id="tree-a-caption"></p>
+                  </div>
+                </div>
+              </div>
+              <div class="panel hidden" id="panel-b">
+                <div class="panel-head">
+                  <h2 id="panel-b-title">A*</h2>
+                  <span class="step-label" id="panel-b-step">—</span>
+                </div>
+                <div class="panel-split">
+                  <div class="maze-col">
+                    <canvas id="canvas-b" width="480" height="400"></canvas>
+                    <p class="node-info" id="panel-b-info">—</p>
+                  </div>
+                  <div class="tree-block">
+                    <div class="panel-head">
+                      <h2>Search tree</h2>
+                    </div>
+                    <div class="tree-viewport" id="tree-b"></div>
+                    <p class="tree-caption" id="tree-b-caption"></p>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="panel hidden" id="panel-b">
-              <div class="panel-head">
-                <h2 id="panel-b-title">A*</h2>
-                <span class="step-label" id="panel-b-step">—</span>
-              </div>
-              <div class="panel-split">
-                <div class="maze-col">
-                  <canvas id="canvas-b" width="480" height="400"></canvas>
-                  <p class="node-info" id="panel-b-info">—</p>
-                </div>
-                <div class="tree-block">
-                  <div class="panel-head">
-                    <h2>Search tree</h2>
-                  </div>
-                  <div class="tree-viewport" id="tree-b"></div>
-                  <p class="tree-caption" id="tree-b-caption"></p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <aside class="side">
-            <section class="card" id="metrics-card">
+            <section class="card metrics-bar" id="metrics-card">
               <h3>Metrics</h3>
               <div id="metrics-table"></div>
             </section>
+          </div>
+
+          <aside class="side">
             <section class="card">
               <h3>Legend</h3>
               <ul class="legend">
