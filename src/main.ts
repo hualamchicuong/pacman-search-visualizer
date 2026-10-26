@@ -39,7 +39,7 @@ let lastResults: SearchResult[] = []
 const controls = bindControls((state) => {
   playerA.setSpeed(state.speed)
   playerB.setSpeed(state.speed)
-  updateLayout(state.mode)
+  updateLayout(state.mode, state.view)
 })
 
 controls.els.mapSelect.addEventListener('change', () => {
@@ -49,10 +49,12 @@ controls.els.mapSelect.addEventListener('change', () => {
   drawIdle()
 })
 
-function updateLayout(mode: 'single' | 'compare'): void {
+function updateLayout(mode: 'single' | 'compare', view: 'both' | 'maze' | 'tree'): void {
   const compare = mode === 'compare'
   panelB.classList.toggle('hidden', !compare)
   panels.classList.toggle('compare', compare)
+  panels.classList.toggle('view-maze', view === 'maze')
+  panels.classList.toggle('view-tree', view === 'tree')
   // Wait for CSS reflow, then redraw + refit (fixes stretch when leaving Compare)
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -256,7 +258,7 @@ controls.els.btnStepBack.addEventListener('click', () => {
   if (controls.get().mode === 'compare') playerB.stepBack()
 })
 
-updateLayout(controls.get().mode)
+updateLayout(controls.get().mode, controls.get().view)
 renderMetrics(metricsEl, [])
 renderInsight(insightEl, [])
 drawIdle()

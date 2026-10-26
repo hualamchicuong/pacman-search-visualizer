@@ -280,6 +280,37 @@ h1 {
   align-items: start;
 }
 
+/* Presenter views: keep chrome, show only maze or only tree */
+.panels.view-maze .panel-split {
+  grid-template-columns: 1fr;
+}
+
+.panels.view-maze .tree-block {
+  display: none !important;
+}
+
+.panels.view-maze .maze-col canvas {
+  max-height: min(70vh, 560px);
+  min-height: 280px;
+}
+
+.panels.view-tree .panel-split {
+  grid-template-columns: 1fr;
+}
+
+.panels.view-tree .maze-col {
+  display: none !important;
+}
+
+.panels.view-tree .tree-block {
+  border-left: none;
+  padding-left: 0;
+}
+
+.panels.view-tree .tree-viewport {
+  height: min(70vh, 560px);
+}
+
 .maze-col {
   display: flex;
   flex-direction: column;

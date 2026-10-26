@@ -7,10 +7,13 @@ import {
 } from '../maps/generate'
 
 export type Mode = 'single' | 'compare'
+/** Presenter focus: both panes, maze only, or search tree only */
+export type ViewMode = 'both' | 'maze' | 'tree'
 
 export interface ControlState {
   mapId: string
   mode: Mode
+  view: ViewMode
   algorithm: AlgorithmId
   algorithmA: AlgorithmId
   algorithmB: AlgorithmId
@@ -39,6 +42,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   els: {
     mapSelect: HTMLSelectElement
     modeSelect: HTMLSelectElement
+    viewSelect: HTMLSelectElement
     algoSelect: HTMLSelectElement
     algoASelect: HTMLSelectElement
     algoBSelect: HTMLSelectElement
@@ -60,6 +64,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
 } {
   const mapSelect = document.querySelector('#map-select') as HTMLSelectElement
   const modeSelect = document.querySelector('#mode-select') as HTMLSelectElement
+  const viewSelect = document.querySelector('#view-select') as HTMLSelectElement
   const algoSelect = document.querySelector('#algo-select') as HTMLSelectElement
   const algoASelect = document.querySelector('#algo-a-select') as HTMLSelectElement
   const algoBSelect = document.querySelector('#algo-b-select') as HTMLSelectElement
@@ -89,6 +94,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const get = (): ControlState => ({
     mapId: mapSelect.value,
     mode: modeSelect.value as Mode,
+    view: viewSelect.value as ViewMode,
     algorithm: algoSelect.value as AlgorithmId,
     algorithmA: algoASelect.value as AlgorithmId,
     algorithmB: algoBSelect.value as AlgorithmId,
@@ -139,6 +145,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   }
 
   modeSelect.addEventListener('change', () => syncMode(true))
+  viewSelect.addEventListener('change', () => onChange?.(get()))
   for (const el of [mapSelect, algoSelect, algoASelect, algoBSelect, speedRange]) {
     el.addEventListener('change', () => onChange?.(get()))
     el.addEventListener('input', () => onChange?.(get()))
@@ -166,6 +173,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     els: {
       mapSelect,
       modeSelect,
+      viewSelect,
       algoSelect,
       algoASelect,
       algoBSelect,
