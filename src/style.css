@@ -344,7 +344,16 @@ canvas {
 .swatch.closed { background: var(--closed); }
 .swatch.open { background: var(--open); }
 .swatch.path { background: var(--path); }
-.swatch.pac { background: var(--pac); border-radius: 50%; }
+
+/* Match canvas Pac-man (wedge + eye), not a plain yellow circle like Food */
+.swatch-pac {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: block;
+  border-radius: 50%;
+  background: #1a1508;
+}
 
 .insight {
   margin: 0;
@@ -489,8 +498,22 @@ canvas {
   line-height: 1.35;
 }
 
-.swatch.tree-path { background: var(--path); }
-.swatch.tree-goal { background: var(--ok); }
+/* Tree colors match treeRenderer.ts (node fill / path stroke / goal) */
+.swatch.tree-node {
+  background: #17324a;
+  border: 1.5px solid #5b7c9d;
+}
+.swatch.tree-path {
+  height: 4px;
+  width: 18px;
+  border-radius: 2px;
+  background: #f08c2e;
+  align-self: center;
+}
+.swatch.tree-goal {
+  background: #1b4332;
+  border: 1.5px solid #52b788;
+}
 
 #metrics-table {
   overflow-x: auto;
