@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pac-man Search Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <h1>Pac-man Search</h1>
+            <p class="tagline">State-space search · Uninformed &amp; Informed</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="toolbar" aria-label="Controls">
+          <p class="toolbar-title">Controls</p>
+
+          <label class="field">
+            <span>Map</span>
+            <select id="map-select"></select>
+          </label>
+          <label class="field">
+            <span>Mode</span>
+            <select id="mode-select">
+              <option value="single">Single</option>
+              <option value="compare">Compare</option>
+            </select>
+          </label>
+          <label class="field" id="algo-field">
+            <span>Algorithm</span>
+            <select id="algo-select"></select>
+          </label>
+          <label class="field compare-only hidden" id="algo-a-field">
+            <span>Left</span>
+            <select id="algo-a-select"></select>
+          </label>
+          <label class="field compare-only hidden" id="algo-b-field">
+            <span>Right</span>
+            <select id="algo-b-select"></select>
+          </label>
+
+          <button type="button" id="btn-run" class="btn primary btn-block">Run</button>
+
+          <div class="toolbar-divider"></div>
+          <p class="toolbar-title">Playback</p>
+
+          <div class="playback">
+            <button type="button" id="btn-reset" class="btn" title="Reset">⏮</button>
+            <button type="button" id="btn-step-back" class="btn" title="Step back">◀</button>
+            <button type="button" id="btn-play" class="btn" title="Play / Pause">▶</button>
+            <button type="button" id="btn-step" class="btn" title="Step forward">▶|</button>
+          </div>
+
+          <label class="field speed">
+            <span>Speed</span>
+            <input id="speed-range" type="range" min="1" max="60" value="12" />
+          </label>
+        </aside>
+
+        <main class="stage">
+          <div class="panels" id="panels">
+            <div class="panel" id="panel-a">
+              <div class="panel-head">
+                <h2 id="panel-a-title">BFS</h2>
+                <span class="step-label" id="panel-a-step">—</span>
+              </div>
+              <div class="panel-split">
+                <div class="maze-col">
+                  <canvas id="canvas-a" width="480" height="400"></canvas>
+                  <p class="node-info" id="panel-a-info">Run an algorithm to begin.</p>
+                </div>
+                <div class="tree-block">
+                  <div class="panel-head">
+                    <h2>Search tree</h2>
+                  </div>
+                  <div class="tree-viewport" id="tree-a"></div>
+                  <p class="tree-caption" id="tree-a-caption"></p>
+                </div>
+              </div>
+            </div>
+            <div class="panel hidden" id="panel-b">
+              <div class="panel-head">
+                <h2 id="panel-b-title">A*</h2>
+                <span class="step-label" id="panel-b-step">—</span>
+              </div>
+              <div class="panel-split">
+                <div class="maze-col">
+                  <canvas id="canvas-b" width="480" height="400"></canvas>
+                  <p class="node-info" id="panel-b-info">—</p>
+                </div>
+                <div class="tree-block">
+                  <div class="panel-head">
+                    <h2>Search tree</h2>
+                  </div>
+                  <div class="tree-viewport" id="tree-b"></div>
+                  <p class="tree-caption" id="tree-b-caption"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="side">
+            <section class="card" id="metrics-card">
+              <h3>Metrics</h3>
+              <div id="metrics-table"></div>
+            </section>
+            <section class="card">
+              <h3>Legend</h3>
+              <ul class="legend">
+                <li><span class="swatch wall"></span> Wall</li>
+                <li><span class="swatch empty"></span> Corridor</li>
+                <li><span class="swatch food"></span> Food</li>
+                <li><span class="swatch closed"></span> CLOSED (expanded)</li>
+                <li><span class="swatch open"></span> OPEN (frontier)</li>
+                <li><span class="swatch path"></span> Solution path</li>
+                <li><span class="swatch pac"></span> Pac-man</li>
+                <li><span class="swatch tree-path"></span> Tree: solution edge</li>
+                <li><span class="swatch tree-goal"></span> Tree: goal node</li>
+              </ul>
+            </section>
+            <section class="card insight-card">
+              <h3>Insight</h3>
+              <div id="insight" class="insight"></div>
+            </section>
+          </aside>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
