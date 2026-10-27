@@ -191,7 +191,8 @@ function closedCellsFrom(keys: Iterable<string>): Array<{ x: number; y: number }
 
 /**
  * Reservoir-style trace: keep up to maxRecordedSteps expand events spread across the run.
- * Goal is always appended (or replaces last if at capacity).
+ * Goal is always appended. Non-goal runs always pin the terminal expand.
+ * `sourceStep` comes from caller (nodesExpanded); `seenExpands` is only for sampling odds.
  */
 class TraceRecorder {
   private expands: StepEvent[] = []
@@ -215,13 +216,14 @@ class TraceRecorder {
     node: SearchNode,
     openCells: Array<{ x: number; y: number }>,
     closedCells: Array<{ x: number; y: number }>,
+    sourceStep: number,
   ): void {
     const event: StepEvent = {
       kind: 'expand',
       node,
       openCells,
       closedCells,
-      sourceStep: this.seenExpands,
+      sourceStep,
     }
     if (this.expands.length < this.maxSteps) {
       this.expands.push(event)
@@ -231,23 +233,41 @@ class TraceRecorder {
     this.expands[j] = event
   }
 
+  /** Ensure terminal expand is present (replace last slot if at capacity). */
+  private pinTerminal(event: StepEvent): void {
+    const src = event.sourceStep ?? 0
+    if (this.expands.some((e) => (e.sourceStep ?? 0) === src)) return
+    this.sampled = true
+    if (this.expands.length < this.maxSteps) {
+      this.expands.push(event)
+      return
+    }
+    if (this.expands.length === 0) {
+      this.expands.push(event)
+      return
+    }
+    this.expands[this.expands.length - 1] = event
+  }
+
   finishWithGoal(
     node: SearchNode,
     openCells: Array<{ x: number; y: number }>,
     closedCells: Array<{ x: number; y: number }>,
+    sourceStep: number,
   ): StepEvent[] {
     const goal: StepEvent = {
       kind: 'goal',
       node,
       openCells,
       closedCells,
-      sourceStep: this.seenExpands,
+      sourceStep,
     }
     this.expands.sort((a, b) => (a.sourceStep ?? 0) - (b.sourceStep ?? 0))
     return [...this.expands, goal]
   }
 
-  finishWithoutGoal(): StepEvent[] {
+  finishWithoutGoal(terminal: StepEvent | null): StepEvent[] {
+    if (terminal) this.pinTerminal(terminal)
     this.expands.sort((a, b) => (a.sourceStep ?? 0) - (b.sourceStep ?? 0))
     if (this.seenExpands > this.expands.length) this.sampled = true
     return [...this.expands]
@@ -277,6 +297,8 @@ type SearchCtx = {
   trace: TraceRecorder
   nodesExpanded: number
   nodesGenerated: number
+  /** Last non-goal expanded node (for terminal trace pin) */
+  lastExpandedNode: SearchNode | null
 }
 
 function beginSearch(maze: Maze, options: EngineOptions): SearchCtx {
@@ -305,6 +327,7 @@ function beginSearch(maze: Maze, options: EngineOptions): SearchCtx {
     trace: new TraceRecorder(options.maxRecordedSteps ?? 6_000),
     nodesExpanded: 0,
     nodesGenerated: 1,
+    lastExpandedNode: null,
   }
 }
 
@@ -327,6 +350,7 @@ function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null
       node,
       ctx.open.snapshotCells(),
       closedCellsFrom(ctx.closedKeys),
+      ctx.nodesExpanded,
     )
     return finish(
       ctx.options,
@@ -363,11 +387,15 @@ function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null
     ctx.nodesGenerated++
   }
 
+  ctx.lastExpandedNode = node
+
+  // Snapshot OPEN/CLOSED only when this expand is kept in the reservoir
   if (ctx.trace.acceptExpand()) {
     ctx.trace.storeExpand(
       node,
       ctx.open.snapshotCells(),
       closedCellsFrom(ctx.closedKeys),
+      ctx.nodesExpanded,
     )
   }
 
@@ -380,14 +408,27 @@ function endSearch(
   termination: TerminationReason,
   goalNode: SearchNode | null = null,
 ): SearchResult {
-  const steps =
-    goalNode && termination === 'goal'
-      ? ctx.trace.finishWithGoal(
-          goalNode,
-          ctx.open.snapshotCells(),
-          closedCellsFrom(ctx.closedKeys),
-        )
-      : ctx.trace.finishWithoutGoal()
+  let steps: StepEvent[]
+  if (goalNode && termination === 'goal') {
+    steps = ctx.trace.finishWithGoal(
+      goalNode,
+      ctx.open.snapshotCells(),
+      closedCellsFrom(ctx.closedKeys),
+      ctx.nodesExpanded,
+    )
+  } else {
+    // One terminal snapshot at stop (limit / exhausted / cancelled) if missing from reservoir
+    const terminal: StepEvent | null = ctx.lastExpandedNode
+      ? {
+          kind: 'expand',
+          node: ctx.lastExpandedNode,
+          openCells: ctx.open.snapshotCells(),
+          closedCells: closedCellsFrom(ctx.closedKeys),
+          sourceStep: ctx.nodesExpanded,
+        }
+      : null
+    steps = ctx.trace.finishWithoutGoal(terminal)
+  }
   return finish(
     ctx.options,
     ctx.maze,

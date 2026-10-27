@@ -58,7 +58,10 @@ export class TreeRenderer {
 
     this.bindInteractions()
     this.ro = new ResizeObserver(() => {
-      if (this.tree) this.fitToView()
+      if (!this.tree) return
+      // Keep user pan/zoom; Fit button / double-click / key 0 still refit
+      if (this.userAdjustedView) return
+      this.fitToView()
     })
     this.ro.observe(this.viewport)
 

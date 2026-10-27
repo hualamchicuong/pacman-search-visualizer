@@ -26,8 +26,13 @@ class WorkerSlot {
       const p = this.pending.get(msg.jobId)
       if (!p) return
       this.pending.delete(msg.jobId)
-      if (msg.type === 'done') p.resolve(msg.result)
-      else p.reject(new SearchCancelledError())
+      if (msg.type === 'done') {
+        p.resolve(msg.result)
+      } else if (msg.type === 'aborted') {
+        p.reject(new SearchCancelledError())
+      } else if (msg.type === 'error') {
+        p.reject(new Error(msg.message || 'Search worker error'))
+      }
     }
     this.worker.onerror = (err) => {
       console.error('Search worker error', err)

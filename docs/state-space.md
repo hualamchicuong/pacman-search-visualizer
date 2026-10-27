@@ -79,11 +79,12 @@ $$
 | **DFS** | LIFO | Có nếu tránh cycle | Không | Path có thể rất dài |
 | **UCS** | ưu tiên \(g\) | Có | Có | ≈ BFS khi \(c=1\) |
 | **Greedy** | ưu tiên \(h\) | Có với CLOSED | Không | Trên food 4 góc có thể suboptimal |
-| **A\*** | ưu tiên \(g+h\) | Có | Có nếu \(h\) admissible | Ít expand hơn BFS |
+| **A\*** | ưu tiên \(g+h\) | Có | Có nếu \(h\) admissible | Thường ít expand hơn BFS (phụ thuộc \(h\) / tie-break) |
 
 **Metrics trong app:**
-- `nodesExpanded` / `nodesGenerated` / `pathCost` / `timeMs`
-- `terminationReason`: `goal` | `exhausted` (OPEN cạn) | `limit` (cắt ở max expand)
+- `nodesExpanded`: số lần pop/expand (gồm goal pop). `nodesGenerated`: root + mọi node được enqueue.
+- `pathCost` / `timeMs`
+- `terminationReason`: `goal` | `exhausted` (OPEN cạn) | `limit` (cắt ở max expand) | `cancelled`
 - `complete` / `optimal` trên bảng là **tính chất lý thuyết**, không phải đảm bảo của lần chạy bị cutoff
 - Trace có thể **lấy mẫu** (reservoir) nếu expand rất nhiều; heatmap OPEN/CLOSED trên maze là projection theo **vị trí ô**, không phải tập state đầy đủ
 

@@ -49,13 +49,9 @@ const controls = bindControls((state) => {
   playerA.setSpeed(state.speed)
   playerB.setSpeed(state.speed)
   if (state.mode !== lastMode) {
-    playerA.pause()
-    playerB.pause()
-    if (state.mode === 'single') {
-      playerB.setResult(null)
-      treeB.clear()
-    }
+    // Mode change: clear metrics/Insight so Compare↔Single never shows stale dual results
     lastMode = state.mode
+    clearRun()
   }
   updateLayout(state.mode, state.view)
 })
@@ -116,7 +112,11 @@ function formatNodeInfo(result: SearchResult | null, player: TracePlayer): strin
   if (!n) return '—'
   const informed = result.algorithm === 'Greedy' || result.algorithm === 'A*'
   const base = `expand g=${n.g}` + (informed ? ` h=${n.h.toFixed(1)} f=${n.f.toFixed(1)}` : '')
-  return `${base} · foodMask=${n.state.foodMask} @ (${n.state.x},${n.state.y})`
+  const src =
+    result.metrics.traceSampled && frame.event?.sourceStep != null
+      ? ` · src=#${frame.event.sourceStep}`
+      : ''
+  return `${base} · foodMask=${n.state.foodMask} @ (${n.state.x},${n.state.y})${src}`
 }
 
 function highlightId(result: SearchResult | null, player: TracePlayer): string | null {

@@ -42,7 +42,9 @@ function subLabel(n: SearchNode, informed: boolean): string {
 
 /**
  * Build search tree from ACTUAL expansion order (as the algorithm explores).
- * Does NOT prefer the solution path — path is only colored after the fact.
+ * Does NOT prefer the solution path during exploration — path is force-injected after.
+ *
+ * Reopen-safe: one node per stateKey, exclusive single parent; solution path FORCE-replaces.
  *
  * @param upToStep inclusive step index in result.steps (for grow-as-you-search UI)
  */
@@ -64,8 +66,40 @@ export function buildSearchTree(
   const byKey = new Map<string, SearchNode>()
   const discoveredAt = new Map<string, number>()
   const childOrder = new Map<string, string[]>()
+  /** childKey → parentKey (exclusive) */
+  const parentOf = new Map<string, string>()
 
-  const ensure = (node: SearchNode, at: number): void => {
+  const rewireParent = (childKey: string, parentKey: string): void => {
+    const prev = parentOf.get(childKey)
+    if (prev === parentKey) {
+      const list = childOrder.get(parentKey) ?? []
+      if (!list.includes(childKey)) {
+        list.push(childKey)
+        childOrder.set(parentKey, list)
+      }
+      return
+    }
+    if (prev) {
+      const oldList = childOrder.get(prev)
+      if (oldList) {
+        childOrder.set(
+          prev,
+          oldList.filter((k) => k !== childKey),
+        )
+      }
+    }
+    parentOf.set(childKey, parentKey)
+    const list = childOrder.get(parentKey) ?? []
+    if (!list.includes(childKey)) list.push(childKey)
+    childOrder.set(parentKey, list)
+  }
+
+  const hasParent = (childKey: string): boolean => parentOf.has(childKey)
+
+  /**
+   * @param force when true (solution inject), replace payload + rewire parent to this chain
+   */
+  const ensure = (node: SearchNode, at: number, force: boolean): void => {
     const chain: SearchNode[] = []
     let cur: SearchNode | null = node
     while (cur) {
@@ -76,30 +110,46 @@ export function buildSearchTree(
     for (let i = chain.length - 1; i >= 0; i--) {
       const n = chain[i]!
       const k = stateKey(n.state)
+
       if (!byKey.has(k)) {
         byKey.set(k, n)
         discoveredAt.set(k, at)
+      } else if (force) {
+        byKey.set(k, n)
       }
+
       if (n.parent) {
         const pk = stateKey(n.parent.state)
-        if (!byKey.has(pk)) continue
-        const list = childOrder.get(pk) ?? []
-        if (!list.includes(k)) {
-          list.push(k) // discovery / expansion order among siblings
-          childOrder.set(pk, list)
+        if (!byKey.has(pk)) {
+          // Parent should already be in byKey from earlier in this chain walk
+          continue
         }
+
+        if (force) {
+          // Path always wins: upgrade parent payload + exclusive rewire
+          byKey.set(pk, n.parent)
+          rewireParent(k, pk)
+        } else if (!hasParent(k)) {
+          // First parent only; upgrade stale parent object if worse g
+          const existingParent = byKey.get(pk)!
+          if (existingParent.g > n.parent.g) {
+            byKey.set(pk, n.parent)
+          }
+          rewireParent(k, pk)
+        }
+        // else: already has a parent — do not add a second edge (reopen-safe)
       }
     }
   }
 
   for (let i = 0; i <= lastStep; i++) {
-    ensure(result.steps[i]!.node, i)
+    ensure(result.steps[i]!.node, i, false)
     if (byKey.size >= MAX_TREE_NODES) break
   }
 
-  // Always attach the solution chain / goal even when exploration was capped
+  // Force-inject solution chain / goal (path always wins on those states)
   if (result.found && result.path.length > 0) {
-    ensure(result.path[result.path.length - 1]!, lastStep)
+    ensure(result.path[result.path.length - 1]!, lastStep, true)
   }
 
   let rootKey: string | null = null

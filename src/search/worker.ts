@@ -12,6 +12,7 @@ export type WorkerInMsg =
 export type WorkerOutMsg =
   | { type: 'done'; jobId: string; result: SearchResult }
   | { type: 'aborted'; jobId: string }
+  | { type: 'error'; jobId: string; message: string }
 
 const cancelled = new Set<string>()
 let activeJobId: string | null = null
@@ -51,7 +52,8 @@ async function handleRun(jobId: string, maze: Maze, algorithm: AlgorithmId): Pro
     }
   } catch (err) {
     console.error(err)
-    const out: WorkerOutMsg = { type: 'aborted', jobId }
+    const message = err instanceof Error ? err.message : String(err)
+    const out: WorkerOutMsg = { type: 'error', jobId, message }
     self.postMessage(out)
   } finally {
     if (activeJobId === jobId) activeJobId = null

@@ -101,6 +101,38 @@ console.log('\n=== Trace reservoir sampling ===')
   )
 }
 
+console.log('\n=== M2 terminal pin when no goal ===')
+{
+  const maze = MAPS.medium!
+  const r = runSearch(maze, {
+    ...engineOptionsFor('BFS'),
+    maxRecordedSteps: 1,
+    maxExpanded: 50,
+  })
+  check('limit stop', r.metrics.terminationReason === 'limit')
+  check('expanded 50', r.metrics.nodesExpanded === 50)
+  const expandSteps = r.steps.filter((s) => s.kind === 'expand')
+  const maxSrc = Math.max(...expandSteps.map((s) => s.sourceStep ?? 0), 0)
+  check(
+    'terminal expand sourceStep === 50',
+    maxSrc === 50,
+    `maxSrc=${maxSrc} steps=${r.steps.length}`,
+  )
+}
+
+console.log('\n=== m2 goal sourceStep === nodesExpanded ===')
+{
+  const maze = MAPS.medium!
+  const r = solve(maze, 'BFS')
+  const goal = r.steps[r.steps.length - 1]
+  check('goal event', goal?.kind === 'goal')
+  check(
+    'goal sourceStep === nodesExpanded',
+    goal?.sourceStep === r.metrics.nodesExpanded,
+    `src=${goal?.sourceStep} expanded=${r.metrics.nodesExpanded}`,
+  )
+}
+
 console.log('\n=== Tree path inject on capped maps ===')
 {
   for (const id of ['small', 'medium', 'branchy'] as const) {
@@ -120,6 +152,64 @@ console.log('\n=== Tree path inject on capped maps ===')
       pathColored >= Math.min(bfs.path.length, Math.floor(bfs.path.length * 0.5)),
       `${pathColored}/${bfs.path.length}`,
     )
+    // Edge g-monotonicity
+    let badEdge = 0
+    const walk = (n: (typeof nodes)[0]): void => {
+      for (const c of n.children) {
+        if (n.g > c.g) badEdge++
+        walk(c)
+      }
+    }
+    walk(tree)
+    check(`tree ${id} no parent.g > child.g`, badEdge === 0, `bad=${badEdge}`)
+  }
+}
+
+console.log('\n=== M1 Greedy reopen tree (seed=24 corners) ===')
+{
+  try {
+    const g = generateMaze({
+      size: 'small',
+      foodCount: 4,
+      startExits: 2,
+      foodsAtCorners: true,
+      seed: 24,
+    })
+    const greedy = solve(g.maze, 'Greedy')
+    check('greedy found', greedy.found, `cost=${greedy.metrics.pathCost}`)
+    const tree = buildSearchTree(greedy)!
+    const nodes = flattenTree(tree)
+    const ids = nodes.map((n) => n.id)
+    check('unique tree node ids', new Set(ids).size === ids.length, `n=${ids.length}`)
+
+    let dupChild = 0
+    let badEdge = 0
+    const walk = (n: (typeof nodes)[0]): void => {
+      const seen = new Set<string>()
+      for (const c of n.children) {
+        if (seen.has(c.id)) dupChild++
+        seen.add(c.id)
+        if (n.g > c.g) badEdge++
+        walk(c)
+      }
+    }
+    walk(tree)
+    check('no duplicate child under same parent', dupChild === 0, `dup=${dupChild}`)
+    check('no parent.g > child.g', badEdge === 0, `bad=${badEdge}`)
+    check('has goal', nodes.some((n) => n.isGoal))
+
+    // Path edges exist in tree
+    let pathOk = true
+    for (let i = 1; i < greedy.path.length; i++) {
+      const a = greedy.path[i - 1]!
+      const b = greedy.path[i]!
+      const dist =
+        Math.abs(a.state.x - b.state.x) + Math.abs(a.state.y - b.state.y)
+      if (dist !== 1) pathOk = false
+    }
+    check('greedy path unit steps', pathOk)
+  } catch (err) {
+    check('generate seed=24', false, err instanceof Error ? err.message : String(err))
   }
 }
 
