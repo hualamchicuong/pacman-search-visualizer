@@ -11,10 +11,16 @@ const DELTAS: Record<Action, { dx: number; dy: number }> = {
 export const ACTIONS: Action[] = ['Up', 'Down', 'Left', 'Right']
 
 export function initialState(maze: Maze): State {
+  let foodMask = fullFoodMask(maze)
+  // If start is on a food cell (layout 'F'), that food is eaten immediately
+  const idx = foodIndexAt(maze, maze.start.x, maze.start.y)
+  if (idx >= 0) {
+    foodMask &= ~(1 << maze.foods[idx]!.bit)
+  }
   return {
     x: maze.start.x,
     y: maze.start.y,
-    foodMask: fullFoodMask(maze),
+    foodMask,
   }
 }
 

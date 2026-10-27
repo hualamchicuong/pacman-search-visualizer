@@ -51,9 +51,7 @@ export function parseMaze(name: string, layout: string[]): Maze {
   if (!start) {
     throw new Error(`Map "${name}" has no Pac-man start (P)`)
   }
-  if (foods.length === 0) {
-    throw new Error(`Map "${name}" has no food (o)`)
-  }
+  // 0 food is allowed (immediate goal); bitmask hard cap remains 20
   if (foods.length > 20) {
     throw new Error(`Map "${name}" has too many foods for bitmask (${foods.length})`)
   }

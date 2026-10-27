@@ -111,8 +111,12 @@ for (const mapId of Object.keys(MAPS)) {
     const cost = r.metrics.pathCost
     const okFound = r.found
     let status = 'OK'
+    if (r.metrics.terminationReason === 'goal' && !okFound) {
+      status = 'FAIL termination=goal but found=false'
+      failed++
+    }
     if (!okFound) {
-      status = 'FAIL (not found)'
+      status = `FAIL (not found, stop=${r.metrics.terminationReason})`
       failed++
     } else if (algo === 'BFS' || algo === 'UCS' || algo === 'A*') {
       if (cost !== ref.cost) {
@@ -147,16 +151,29 @@ for (const mapId of Object.keys(MAPS)) {
   )
   if (adm.violations > 0) failed++
 
-  // Tree layout: path child is sorted first → leftmost (visual bias, not algo)
+  // Tree: exploration-order layout; solution chain injected when found
   const tree = buildSearchTree(bfs)
   if (tree) {
     const nodes = flattenTree(tree)
     const pathNodes = nodes.filter((n) => n.onPath)
-    const avgPathX =
-      pathNodes.reduce((a, n) => a + n.x, 0) / Math.max(pathNodes.length, 1)
-    const avgAllX = nodes.reduce((a, n) => a + n.x, 0) / nodes.length
+    const hasGoal = nodes.some((n) => n.isGoal)
+    if (bfs.found && !hasGoal) {
+      console.log('  FAIL tree missing goal after inject')
+      failed++
+    }
+    // Path validity: successive path states differ by one move
+    for (let i = 1; i < bfs.path.length; i++) {
+      const a = bfs.path[i - 1]!.state
+      const b = bfs.path[i]!.state
+      const dist = Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+      if (dist !== 1) {
+        console.log(`  FAIL path not unit steps at ${i}`)
+        failed++
+        break
+      }
+    }
     console.log(
-      `  Tree layout: nodes=${nodes.length} avgPathX=${avgPathX.toFixed(2)} avgAllX=${avgAllX.toFixed(2)} (path first → tends LEFT)`,
+      `  Tree: nodes=${nodes.length} pathNodes=${pathNodes.length} hasGoal=${hasGoal} (exploration order + path inject)`,
     )
   }
 }

@@ -1,6 +1,6 @@
 # Phân tích Không gian Trạng thái — Bài toán Pac-man (Search)
 
-*(Báo cáo kèm ứng dụng `pacman-visualizer` — Vite + TypeScript, chạy thuật toán trên client)*
+*(Báo cáo kèm ứng dụng `pacman-search-visualizer` — Vite + TypeScript, chạy thuật toán trên client)*
 
 ---
 
@@ -9,10 +9,10 @@
 - **Môi trường:** mê cung lưới 2D tĩnh (không ghost).
 - **Tác tử:** Pac-man di chuyển 4 hướng.
 - **Mục tiêu:** ăn **hết** mọi viên thức ăn với số bước tối thiểu (khi dùng thuật toán tối ưu).
-- **Ký hiệu ô:** `#` tường, `.` hành lang, `P` vị trí bắt đầu, `o` thức ăn.
+- **Ký hiệu ô:** `#` tường, `.` hành lang, `P` vị trí bắt đầu, `o` thức ăn, `F` = start+food (food bị ăn ngay ở \(S_0\)).
 - **Chi phí bước:** \(c(S, a, S') = 1\) với mọi hành động hợp lệ.
 
-Ứng dụng cung cấp 3 map mẫu: `tiny` (3 food), `small` (4 food), `medium` (7 food).
+Ứng dụng cung cấp map mẫu: `tiny` (3 food), `small` (4 food), `medium` (7 food), `branchy` (4 food ở góc / ngã tư), cùng **Generate** (custom: số food, start exits 2–4, tùy chọn food 4 góc).
 
 ---
 
@@ -35,15 +35,15 @@ $$
 $$
 
 với \(k\) = số food, \(N_{\text{passable}}\) = số ô không phải tường.  
-Ví dụ map `tiny`: khoảng \(15 \times 2^3 = 120\) trạng thái — đủ nhỏ để BFS duyệt hết.
+Ví dụ map `tiny`: \(12 \times 2^3 = 96\) trạng thái (cận trên) — đủ nhỏ để BFS duyệt hết. Không phải mọi tổ hợp \((x,y,F)\) đều reachable.
 
 ### 2.2 Trạng thái đầu \(S_0\)
 
 $$
-S_0 = (x_P, y_P, F_0),\quad F_0 = 2^{k} - 1
+S_0 = (x_P, y_P, F_0)
 $$
 
-(tất cả bit food = 1).
+\(F_0\) = full mask, trừ bit food tại ô start nếu layout dùng `F`.
 
 ### 2.3 Trạng thái đích \(S_G\)
 
@@ -51,24 +51,14 @@ $$
 S_G = \{ (x, y, F) \mid F = 0 \}
 $$
 
-Vị trí \((x,y)\) bất kỳ sau khi hết food đều là goal (điều kiện goal chỉ phụ thuộc \(F\)).
+Vị trí \((x,y)\) bất kỳ sau khi hết food đều là goal. Map 0 food → goal ngay tại root (cost 0).
 
 ---
 
 ## 3. Toán tử / Actions
 
-Từ \(S = (x,y,F)\), bốn toán tử:
-
-| Toán tử | Tiền điều kiện | Chuyển trạng thái |
-|:---|:---|:---|
-| `Up` | ô \((x, y-1)\) trong biên và không tường | \((x,y,F) \rightarrow (x, y-1, F')\) |
-| `Down` | tương tự \(y+1\) | \((x,y,F) \rightarrow (x, y+1, F')\) |
-| `Left` | tương tự \(x-1\) | \((x,y,F) \rightarrow (x-1, y, F')\) |
-| `Right` | tương tự \(x+1\) | \((x,y,F) \rightarrow (x+1, y, F')\) |
-
-Trong đó \(F' = F\) trừ khi ô mới chứa food \(i\) còn lại: \(F' = F\ \&\ \neg(1 \ll i)\).
-
-**Path cost:** \(c = 1\) mỗi bước.
+Từ \(S = (x,y,F)\), bốn toán tử: `Up` / `Down` / `Left` / `Right` (biên + không tường).  
+\(F' = F\) trừ khi ô mới chứa food \(i\) còn lại. **Path cost:** \(c = 1\) mỗi bước.
 
 ---
 
@@ -81,28 +71,29 @@ $$
 h(n) = d_{\text{Manhattan}}(\text{Pac}, \text{food gần nhất}) + \mathrm{MST}(\text{các food còn lại})
 $$
 
-\(h\) admissible (không overestimate) trên lưới 4-hướng với cạnh unit.
+\(h\) admissible (và consistent trên lưới 4-hướng unit cost). Greedy **chọn state có \(h\) nhỏ nhất** trên frontier — không phải “luôn chạy thẳng tới food gần nhất” theo nghĩa path-greedy đơn giản.
 
-| Thuật toán | OPEN | \(f\) | Completeness | Optimality | Ưu | Nhược |
-|:---|:---|:---|:---|:---|:---|:---|
-| **BFS** | FIFO | độ sâu | Có (SS hữu hạn) | Có (\(c=1\)) | Đường ngắn nhất | Mở rộng nhiều nút / tốn bộ nhớ |
-| **DFS** | LIFO | — | Có nếu tránh cycle | Không | Ít bộ nhớ frontier | Dễ lạc nhánh, path dài |
-| **UCS** | ưu tiên \(g\) | \(g\) | Có | Có | Đúng với chi phí tổng quát | Trùng BFS khi \(c=1\); không dùng \(h\) |
-| **Greedy** | ưu tiên \(h\) | \(h\) | Thực tiễn có CLOSED | Không | Nhanh, ít expand trên map “dễ” | Có thể path kém tối ưu |
-| **A\*** | ưu tiên \(g+h\) | \(g+h\) | Có | Có nếu \(h\) admissible | Ít expand hơn BFS, vẫn tối ưu | Phụ thuộc chất lượng \(h\); MST tốn thêm CPU |
+| Thuật toán | OPEN | Completeness (lý thuyết) | Optimality | Ghi chú |
+|:---|:---|:---|:---|:---|
+| **BFS** | FIFO | Có (SS hữu hạn) | Có (\(c=1\)) | Baseline tối ưu |
+| **DFS** | LIFO | Có nếu tránh cycle | Không | Path có thể rất dài |
+| **UCS** | ưu tiên \(g\) | Có | Có | ≈ BFS khi \(c=1\) |
+| **Greedy** | ưu tiên \(h\) | Có với CLOSED | Không | Trên food 4 góc có thể suboptimal |
+| **A\*** | ưu tiên \(g+h\) | Có | Có nếu \(h\) admissible | Ít expand hơn BFS |
 
-**Cơ chế chung:**
+**Metrics trong app:**
+- `nodesExpanded` / `nodesGenerated` / `pathCost` / `timeMs`
+- `terminationReason`: `goal` | `exhausted` (OPEN cạn) | `limit` (cắt ở max expand)
+- `complete` / `optimal` trên bảng là **tính chất lý thuyết**, không phải đảm bảo của lần chạy bị cutoff
+- Trace có thể **lấy mẫu** (reservoir) nếu expand rất nhiều; heatmap OPEN/CLOSED trên maze là projection theo **vị trí ô**, không phải tập state đầy đủ
 
-1. `OPEN = [S0]`, `CLOSED = ∅`
-2. Lấy nút theo chiến lược frontier
-3. Nếu goal → dựng path qua parent
-4. Sinh successors; bỏ qua trạng thái đã có \(g\) không tốt hơn; đưa vào OPEN; đưa nút hiện tại vào CLOSED
+**Search tree:** giữ thứ tự khám phá (cap ~90 nút đầu); khi tìm thấy goal sẽ **gắn thêm** chuỗi path/goal dù cây bị cắt.
 
 ---
 
 ## 5. Trace mẫu & So sánh thực nghiệm
 
-### 5.1 Map `tiny` (minh họa)
+### 5.1 Map `tiny`
 
 ```
 #######
@@ -112,44 +103,31 @@ $$
 #######
 ```
 
-\(S_0 = (1,1,7)\) (3 food → mask `0b111`).  
-Goal khi `foodMask = 0`.
+Chạy app (mode **Compare**, Top=BFS, Bottom=A\*) trên `tiny` / `small` / `medium` / `branchy`.
 
-Chạy app (mode **Compare**, Left=BFS, Right=A\*) trên `tiny` / `small` để xem:
-
-- Heatmap **CLOSED** (ô đã expand) vs **OPEN** (frontier)
-- Path cuối cùng và food biến mất theo từng bước path
-- Bảng metrics: Expanded, Generated, Path cost, Time (ms)
-
-### 5.2 Kết quả chạy thực tế (smoke test trong repo)
+### 5.2 Kết quả chạy thực tế (smoke / verify)
 
 | Map | Algo | Path cost | Expanded | Ghi chú |
 |:---|:---|---:|---:|:---|
 | tiny | BFS / UCS / A* / Greedy | **8** | 27 / 27 / 9 / 9 | DFS = 14 (không tối ưu) |
-| small | BFS / UCS / A* | **20** | 170 / 170 / 25 | DFS = 58; Greedy = 20, expand 23 |
+| small | BFS / UCS / A* | **20** | 170 / 170 / 25 | DFS = 58; Greedy = 20 |
 | medium | BFS / UCS / A* | **42** | 1302 / 1302 / **236** | DFS = 106; **Greedy = 54** (suboptimal) |
 
-Nhận xét:
-- **BFS vs DFS:** DFS path dài hơn rõ (tiny 14 vs 8; medium 106 vs 42).
-- **BFS vs A\*:** cùng cost tối ưu; A\* mở rộng ít hơn nhiều trên `medium` (236 vs 1302).
-- **Greedy vs A\*:** trên `medium`, Greedy nhanh nhưng **cost 54 > 42** — minh họa mất optimality.
-- **UCS ≈ BFS** khi mọi cạnh \(c=1\).
-
-Panel **Metrics** trong app sẽ cho cùng loại số liệu mỗi lần Run.
+Nhận xét: BFS vs A\* cùng cost tối ưu; A\* ít expand hơn trên `medium`. Greedy trên `medium` minh họa mất optimality. Food 4 góc (Generate / một số layout) là edge case thứ tự ăn — Greedy không luôn suboptimal.
 
 ### 5.3 Cách chạy app
 
 ```bash
-cd pacman-visualizer
+cd pacman-search-visualizer
 npm install
 npm run dev
 ```
 
-Mở trình duyệt (mặc định `http://localhost:5173`), chọn map / thuật toán / Compare, nhấn **Run**, dùng Play/Step để quan sát OPEN–CLOSED.
+UI: Map / Generate / Mode (Single|Compare) / View (Both|Pac-man only|Tree only) / Playback.
 
 ---
 
 ## Kết luận
 
 Bài toán Pac-man “ăn hết food” là tìm kiếm trên không gian \((x,y,F)\).  
-Tìm kiếm mù (BFS/DFS/UCS) và có thông tin (Greedy/A\*) cùng mô hình successor; khác nhau ở chiến lược chọn nút từ OPEN. Visualization + metrics làm rõ trade-off **tính tối ưu ↔ số nút mở rộng ↔ thời gian**, đúng yêu cầu đề bài.
+Tìm kiếm mù và có thông tin cùng mô hình successor; khác nhau ở chiến lược chọn nút từ OPEN. Visualization + metrics làm rõ trade-off **tính tối ưu ↔ số nút mở rộng ↔ thời gian**.

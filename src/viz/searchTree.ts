@@ -18,7 +18,7 @@ export interface TreeNode {
 }
 
 /** Cap exploration tree size (chronological expansions, not solution-biased). */
-const MAX_TREE_NODES = 90
+export const MAX_TREE_NODES = 90
 
 function bitCount(mask: number): number {
   let c = 0
@@ -95,6 +95,11 @@ export function buildSearchTree(
   for (let i = 0; i <= lastStep; i++) {
     ensure(result.steps[i]!.node, i)
     if (byKey.size >= MAX_TREE_NODES) break
+  }
+
+  // Always attach the solution chain / goal even when exploration was capped
+  if (result.found && result.path.length > 0) {
+    ensure(result.path[result.path.length - 1]!, lastStep)
   }
 
   let rootKey: string | null = null

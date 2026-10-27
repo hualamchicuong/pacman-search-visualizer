@@ -24,8 +24,12 @@ export interface FrameState {
 
 /**
  * HiDPI maze canvas — smooth Pac-man / food (not pixel-art).
+ * Never falls back to backing-store pixels as CSS size (avoids DPR blow-up when hidden).
  */
 export class CanvasRenderer {
+  private lastCssW = 480
+  private lastCssH = 400
+
   constructor(
     private canvas: HTMLCanvasElement,
     private ctx: CanvasRenderingContext2D,
@@ -39,11 +43,18 @@ export class CanvasRenderer {
     return new CanvasRenderer(canvas, ctx)
   }
 
-  /** Match backing store to CSS size × devicePixelRatio for crisp circles. */
-  private syncSize(): void {
+  /**
+   * @returns false when canvas has no CSS layout size (hidden) — caller should skip draw.
+   */
+  private syncSize(): boolean {
+    const cssW = this.canvas.clientWidth
+    const cssH = this.canvas.clientHeight
+    if (cssW <= 0 || cssH <= 0) return false
+
+    this.lastCssW = cssW
+    this.lastCssH = cssH
+
     const dpr = Math.max(1, window.devicePixelRatio || 1)
-    const cssW = Math.max(1, this.canvas.clientWidth || this.canvas.width)
-    const cssH = Math.max(1, this.canvas.clientHeight || this.canvas.height)
     const w = Math.round(cssW * dpr)
     const h = Math.round(cssH * dpr)
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -53,17 +64,20 @@ export class CanvasRenderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     this.ctx.imageSmoothingEnabled = true
     this.ctx.imageSmoothingQuality = 'high'
+    return true
   }
 
   private cssSize(): { w: number; h: number } {
+    const cssW = this.canvas.clientWidth
+    const cssH = this.canvas.clientHeight
     return {
-      w: Math.max(1, this.canvas.clientWidth || 480),
-      h: Math.max(1, this.canvas.clientHeight || 400),
+      w: cssW > 0 ? cssW : this.lastCssW,
+      h: cssH > 0 ? cssH : this.lastCssH,
     }
   }
 
   draw(maze: Maze, result: SearchResult | null, frame: FrameState): void {
-    this.syncSize()
+    if (!this.syncSize()) return
     const { w, h } = this.cssSize()
     const pad = 10
     const cell = Math.max(
@@ -161,7 +175,6 @@ export class CanvasRenderer {
     const r = Math.max(5, cell * 0.34)
     const mouth = 0.55
 
-    // Soft glow
     this.ctx.beginPath()
     this.ctx.fillStyle = 'rgba(255, 214, 10, 0.22)'
     this.ctx.arc(cx, cy, r * 1.25, 0, Math.PI * 2)
@@ -180,7 +193,6 @@ export class CanvasRenderer {
     this.ctx.arc(cx, cy, r, mouth, Math.PI * 2 - mouth)
     this.ctx.stroke()
 
-    // Eye
     this.ctx.beginPath()
     this.ctx.fillStyle = COLORS.pacStroke
     this.ctx.arc(cx + r * 0.08, cy - r * 0.38, Math.max(1.4, r * 0.13), 0, Math.PI * 2)

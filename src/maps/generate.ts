@@ -28,6 +28,14 @@ export interface GenerateResult {
   openCells: number
   startExits: number
   foodsAtCorners: boolean
+  seed: number
+}
+
+function fisherYates<T>(arr: T[], rand: () => number): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j]!, arr[i]!]
+  }
 }
 
 /** Interior cells next to the four map corners (inside the border wall). */
@@ -229,9 +237,10 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
 
     // Fallback: try every open cell and carve
     if (!start) {
-      const shuffled = [...opens]
-        .filter((c) => !(foodsAtCorners && cornerKey.has(`${c.x},${c.y}`)))
-        .sort(() => rand() - 0.5)
+      const shuffled = [...opens].filter(
+        (c) => !(foodsAtCorners && cornerKey.has(`${c.x},${c.y}`)),
+      )
+      fisherYates(shuffled, rand)
       for (const c of shuffled) {
         const trial = cloneGrid(walls)
         if (foodsAtCorners) {
@@ -256,6 +265,10 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
     }
 
     const reach = reachable(working, start.x, start.y)
+    const openCount = openList(working).length
+    // Require a single connected open component from Pac-man
+    if (reach.size !== openCount) continue
+
     if (foodsAtCorners) {
       const allCornersReachable = corners.every((c) => reach.has(`${c.x},${c.y}`))
       if (!allCornersReachable) continue
@@ -274,11 +287,7 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
         .filter((c) => !(c.x === start!.x && c.y === start!.y))
 
       if (places.length < foodCount) continue
-
-      for (let i = places.length - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1))
-        ;[places[i], places[j]] = [places[j]!, places[i]!]
-      }
+      fisherYates(places, rand)
       foods = places.slice(0, foodCount)
     }
 
@@ -286,9 +295,10 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
     const maze = parseMaze(`custom-${size}`, layout)
     return {
       maze,
-      openCells: openList(working).length,
+      openCells: openCount,
       startExits: degree(working, start.x, start.y),
       foodsAtCorners: foodsAtCorners && hasFoodsAtFourCorners(maze),
+      seed,
     }
   }
 

@@ -1,5 +1,5 @@
 import type { TreeNode } from './searchTree'
-import { filterTreeByStep, flattenTree } from './searchTree'
+import { filterTreeByStep, flattenTree, MAX_TREE_NODES } from './searchTree'
 
 const H_GAP = 118
 const V_GAP = 100
@@ -34,6 +34,8 @@ export class TreeRenderer {
   private lastRevealPath = false
   private nodeEls = new Map<string, { rect: SVGRectElement; node: TreeNode }>()
   private ro: ResizeObserver
+  /** After user pans/zooms, auto-fit on each step is suppressed until Fit */
+  private userAdjustedView = false
 
   constructor(
     private viewport: HTMLElement,
@@ -45,6 +47,7 @@ export class TreeRenderer {
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     this.svg.classList.add('tree-svg')
     this.svg.setAttribute('role', 'img')
+    this.svg.setAttribute('aria-label', 'Search tree visualization')
     this.svg.setAttribute('width', '100%')
     this.svg.setAttribute('height', '100%')
 
@@ -72,6 +75,7 @@ export class TreeRenderer {
     this.highlightId = null
     this.lastProgress = -1
     this.lastRevealPath = false
+    this.userAdjustedView = false
     this.nodeEls.clear()
     this.world.innerHTML = ''
     this.scale = 1
@@ -91,7 +95,12 @@ export class TreeRenderer {
     t.textContent = message
     this.world.appendChild(t)
     this.captionEl.textContent =
-      'Cây khám phá theo thứ tự expand · lăn chuột zoom · kéo để xem · double-click = fit'
+      `Cây khám phá (≤${MAX_TREE_NODES} nút đầu + path/goal nếu có) · zoom/kéo · double-click = fit`
+  }
+
+  /** True after user pan/zoom — callers should preserve view during playback. */
+  hasUserAdjustedView(): boolean {
+    return this.userAdjustedView
   }
 
   /** Store full exploration tree; start at progress 0 (root only as search begins). */
@@ -99,6 +108,7 @@ export class TreeRenderer {
     this.fullTree = root
     this.highlightId = null
     this.lastProgress = -1
+    this.userAdjustedView = false
     if (!root) {
       this.clear()
       return
@@ -120,7 +130,8 @@ export class TreeRenderer {
     this.lastProgress = step
     this.lastRevealPath = revealPath
 
-    const saved = preserveView
+    const keepView = preserveView || this.userAdjustedView
+    const saved = keepView
       ? { scale: this.scale, panX: this.panX, panY: this.panY }
       : null
 
@@ -147,9 +158,16 @@ export class TreeRenderer {
     }
 
     const nodes = flattenTree(visible)
-    const mode = revealPath ? 'đã tô path lời giải' : 'đang khám phá (chưa biết đích)'
+    const fullCount = this.fullTree ? flattenTree(this.fullTree).length : nodes.length
+    const capped = fullCount >= MAX_TREE_NODES
+    const mode = revealPath
+      ? 'đã tô path/goal (gắn thêm nếu cây bị cắt)'
+      : 'đang khám phá (chưa biết đích)'
+    const capNote = capped
+      ? ` · hiển thị ≤${MAX_TREE_NODES} nút khám phá đầu (+ path)`
+      : ''
     this.captionEl.textContent =
-      `${nodes.length} nút đã mở · ${mode} · cam = path (sau khi tìm thấy) · lăn chuột zoom · kéo · double-click fit`
+      `${nodes.length} nút · ${mode}${capNote} · cam = path · double-click fit`
   }
 
   setHighlight(highlightId: string | null): void {
@@ -162,12 +180,12 @@ export class TreeRenderer {
 
   fitToView(): void {
     if (!this.tree) return
+    this.userAdjustedView = false
     const { w, h } = this.viewportSize()
     if (w < 2 || h < 2) return
     const pad = 16
     const sx = (w - pad * 2) / Math.max(this.contentW, 1)
     const sy = (h - pad * 2) / Math.max(this.contentH, 1)
-    // Always fit entire current tree into the viewport (allow scale > 1 for tiny trees)
     this.scale = Math.min(sx, sy)
     this.minScale = Math.min(sx, sy) * 0.35
     this.maxScale = Math.max(3.5, this.scale * 4)
@@ -262,6 +280,7 @@ export class TreeRenderer {
 
     this.viewport.addEventListener('pointermove', (e) => {
       if (!this.dragging) return
+      this.userAdjustedView = true
       this.panX += e.clientX - this.lastX
       this.panY += e.clientY - this.lastY
       this.lastX = e.clientX
@@ -292,6 +311,7 @@ export class TreeRenderer {
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
         const next = clamp(this.scale * factor, this.minScale, this.maxScale)
         if (next === this.scale) return
+        this.userAdjustedView = true
         const worldX = (mx - this.panX) / this.scale
         const worldY = (my - this.panY) / this.scale
         this.scale = next
@@ -305,6 +325,17 @@ export class TreeRenderer {
     this.viewport.addEventListener('dblclick', () => {
       if (this.tree) this.fitToView()
     })
+
+    this.viewport.addEventListener('keydown', (e) => {
+      if (e.key === '0' || e.key === 'Home') {
+        e.preventDefault()
+        if (this.tree) this.fitToView()
+      }
+    })
+    if (!this.viewport.hasAttribute('tabindex')) {
+      this.viewport.setAttribute('tabindex', '0')
+      this.viewport.setAttribute('aria-label', 'Search tree — scroll to zoom, drag to pan, 0 to fit')
+    }
   }
 
   private styleRect(id: string, highlighted: boolean): void {

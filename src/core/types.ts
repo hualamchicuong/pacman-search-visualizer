@@ -27,7 +27,12 @@ export interface StepEvent {
   openCells: Array<{ x: number; y: number }>
   /** Positions in CLOSED (expanded) after this step */
   closedCells: Array<{ x: number; y: number }>
+  /** Expansion index when this event was produced (for sampled traces) */
+  sourceStep?: number
 }
+
+/** Why the search loop stopped */
+export type TerminationReason = 'goal' | 'exhausted' | 'limit'
 
 export interface SearchMetrics {
   algorithm: AlgorithmId
@@ -37,8 +42,14 @@ export interface SearchMetrics {
   depth: number | null
   timeMs: number
   found: boolean
+  /** Theoretical completeness (from ALGORITHM_META), not this run */
   complete: boolean
   optimal: boolean | 'conditional'
+  terminationReason: TerminationReason
+  /** True when recorded steps are a sample of all expansions */
+  traceSampled: boolean
+  /** Expansions that produced a recorded step (before goal append) */
+  traceRecorded: number
 }
 
 export interface SearchResult {

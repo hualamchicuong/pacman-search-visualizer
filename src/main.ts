@@ -27,6 +27,9 @@ const infoB = document.querySelector('#panel-b-info') as HTMLElement
 const metricsEl = document.querySelector('#metrics-table') as HTMLElement
 const insightEl = document.querySelector('#insight') as HTMLElement
 
+canvasA.setAttribute('aria-label', 'Pac-man maze visualization (top / single)')
+canvasB.setAttribute('aria-label', 'Pac-man maze visualization (bottom compare)')
+
 const rendererA = CanvasRenderer.attach(canvasA)
 const rendererB = CanvasRenderer.attach(canvasB)
 const treeA = TreeRenderer.attach(treeViewA, treeCapA)
@@ -35,18 +38,42 @@ const playerA = new TracePlayer()
 const playerB = new TracePlayer()
 
 let lastResults: SearchResult[] = []
+let lastMode: 'single' | 'compare' = 'single'
 
 const controls = bindControls((state) => {
   playerA.setSpeed(state.speed)
   playerB.setSpeed(state.speed)
+  if (state.mode !== lastMode) {
+    playerA.pause()
+    playerB.pause()
+    if (state.mode === 'single') {
+      playerB.setResult(null)
+      treeB.clear()
+    }
+    lastMode = state.mode
+  }
   updateLayout(state.mode, state.view)
 })
 
-controls.els.mapSelect.addEventListener('change', () => {
+lastMode = controls.get().mode
+
+function clearRun(): void {
   lastResults = []
+  playerA.pause()
+  playerB.pause()
   playerA.setResult(null)
   playerB.setResult(null)
+  treeA.clear()
+  treeB.clear()
+  titleA.textContent = '—'
+  titleB.textContent = '—'
+  renderMetrics(metricsEl, [])
+  renderInsight(insightEl, [])
   drawIdle()
+}
+
+controls.els.mapSelect.addEventListener('change', () => {
+  clearRun()
 })
 
 function updateLayout(mode: 'single' | 'compare', view: 'both' | 'maze' | 'tree'): void {
@@ -55,7 +82,6 @@ function updateLayout(mode: 'single' | 'compare', view: 'both' | 'maze' | 'tree'
   panels.classList.toggle('compare', compare)
   panels.classList.toggle('view-maze', view === 'maze')
   panels.classList.toggle('view-tree', view === 'tree')
-  // Wait for CSS reflow, then redraw + refit (fixes stretch when leaving Compare)
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       refreshAfterLayout()
@@ -69,8 +95,8 @@ function refreshAfterLayout(): void {
     return
   }
   redraw()
-  treeA.fitToView()
-  if (controls.get().mode === 'compare') {
+  if (!treeA.hasUserAdjustedView()) treeA.fitToView()
+  if (controls.get().mode === 'compare' && !treeB.hasUserAdjustedView()) {
     treeB.fitToView()
   }
 }
@@ -99,10 +125,6 @@ function highlightId(result: SearchResult | null, player: TracePlayer): string |
   return null
 }
 
-/**
- * Grow exploration tree with playback and FIT every step
- * (preserveView=false → fitToView after each expansion).
- */
 function syncTree(
   tree: TreeRenderer,
   result: SearchResult | null,
@@ -110,10 +132,11 @@ function syncTree(
 ): void {
   if (!result || result.steps.length === 0) return
   const frame = player.frame
+  const preserve = tree.hasUserAdjustedView()
   if (frame.showPath) {
-    tree.setProgress(result.steps.length - 1, true, false)
+    tree.setProgress(result.steps.length - 1, true, preserve)
   } else {
-    tree.setProgress(frame.stepIndex, false, false)
+    tree.setProgress(frame.stepIndex, false, preserve)
   }
   tree.setHighlight(highlightId(result, player))
 }
@@ -122,17 +145,29 @@ function currentMaze() {
   return getMap(controls.get().mapId)
 }
 
+function mazeVisible(): boolean {
+  return controls.get().view !== 'tree'
+}
+
 function redraw(): void {
   const maze = currentMaze()
   if (!maze) return
-  rendererA.draw(maze, playerA.getResult(), playerA.frame)
-  stepA.textContent = `${playerA.frame.stepIndex + 1}/${playerA.length}`
+  const showMaze = mazeVisible()
+
+  if (showMaze) {
+    rendererA.draw(maze, playerA.getResult(), playerA.frame)
+  }
+  stepA.textContent =
+    playerA.length > 0 ? `${playerA.frame.stepIndex + 1}/${playerA.length}` : '—'
   infoA.textContent = formatNodeInfo(playerA.getResult(), playerA)
   syncTree(treeA, playerA.getResult(), playerA)
 
   if (controls.get().mode === 'compare') {
-    rendererB.draw(maze, playerB.getResult(), playerB.frame)
-    stepB.textContent = `${playerB.frame.stepIndex + 1}/${playerB.length}`
+    if (showMaze) {
+      rendererB.draw(maze, playerB.getResult(), playerB.frame)
+    }
+    stepB.textContent =
+      playerB.length > 0 ? `${playerB.frame.stepIndex + 1}/${playerB.length}` : '—'
     infoB.textContent = formatNodeInfo(playerB.getResult(), playerB)
     syncTree(treeB, playerB.getResult(), playerB)
   }
@@ -141,8 +176,12 @@ function redraw(): void {
 function drawIdle(): void {
   const maze = currentMaze()
   if (!maze) return
-  rendererA.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
-  rendererB.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
+  if (mazeVisible()) {
+    rendererA.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
+    if (controls.get().mode === 'compare') {
+      rendererB.draw(maze, null, { stepIndex: 0, event: null, showPath: false, pathIndex: 0 })
+    }
+  }
   treeA.clear()
   treeB.clear()
   stepA.textContent = '—'
@@ -151,12 +190,17 @@ function drawIdle(): void {
   infoB.textContent = '—'
 }
 
+function syncPlayButton(): void {
+  controls.els.btnPlay.textContent =
+    playerA.isPlaying() || playerB.isPlaying() ? '⏸' : '▶'
+}
+
 playerA.onChange(() => {
-  controls.els.btnPlay.textContent = playerA.isPlaying() || playerB.isPlaying() ? '⏸' : '▶'
+  syncPlayButton()
   redraw()
 })
 playerB.onChange(() => {
-  controls.els.btnPlay.textContent = playerA.isPlaying() || playerB.isPlaying() ? '⏸' : '▶'
+  syncPlayButton()
   if (controls.get().mode === 'compare') redraw()
 })
 
@@ -177,7 +221,6 @@ function run(): void {
       titleA.textContent = state.algorithm
       playerA.setResult(result)
       playerB.setResult(null)
-      // Full exploration tree in discovery order (not solution-biased)
       treeA.setTree(buildSearchTree(result))
       treeB.clear()
     } else {
@@ -217,13 +260,10 @@ controls.els.btnGenerate.addEventListener('click', () => {
     controls.refreshMapSelect('custom')
     const cornerNote = result.foodsAtCorners ? ', foods@4-corners' : ''
     controls.setGenerateStatus(
-      `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}. Press Run.`,
+      `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}, seed=${result.seed}. Press Run.`,
       'ok',
     )
-    lastResults = []
-    playerA.setResult(null)
-    playerB.setResult(null)
-    drawIdle()
+    clearRun()
   } catch (err) {
     const msg =
       err instanceof GenerateError
@@ -236,13 +276,21 @@ controls.els.btnGenerate.addEventListener('click', () => {
 })
 
 controls.els.btnRun.addEventListener('click', run)
+
 controls.els.btnPlay.addEventListener('click', () => {
-  playerA.toggle()
-  if (controls.get().mode === 'compare') {
-    if (playerA.isPlaying()) playerB.play()
-    else playerB.pause()
+  const compare = controls.get().mode === 'compare'
+  const anyPlaying = playerA.isPlaying() || (compare && playerB.isPlaying())
+  if (anyPlaying) {
+    // Global pause — do not toggle/restart a finished panel
+    playerA.pause()
+    playerB.pause()
+  } else {
+    if (playerA.getResult()) playerA.play()
+    if (compare && playerB.getResult()) playerB.play()
   }
+  syncPlayButton()
 })
+
 controls.els.btnReset.addEventListener('click', () => {
   playerA.reset()
   playerB.reset()

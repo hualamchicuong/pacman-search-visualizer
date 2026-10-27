@@ -143,7 +143,9 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     genFoods.max = String(max)
     if (Number(genFoods.value) > max) genFoods.value = String(max)
     if (Number(genFoods.value) < 1) genFoods.value = '1'
-    setGenerateHint(`Max foods for ${size}: ${max} (≤ open cells − 1, hard cap 20 for bitmask).`)
+    setGenerateHint(
+      `Max foods for ${size}: ${max} (geometric upper bound ≤ open−1, cap 20). Dense walls may make high counts fail — try fewer foods.`,
+    )
   }
 
   const refreshMapSelect = (selectId?: string): void => {
