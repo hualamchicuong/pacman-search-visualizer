@@ -1,22 +1,15 @@
 import type { Maze } from '../core/maze'
 import type { AlgorithmId, SearchResult } from '../core/types'
 import { runSearch } from './engine'
+import { engineOptionsFor } from './options'
 
 export const ALGORITHMS: AlgorithmId[] = ['BFS', 'DFS', 'UCS', 'Greedy', 'A*']
 
+/** Sync solve — used by Node verify scripts. */
 export function solve(maze: Maze, algorithm: AlgorithmId): SearchResult {
-  switch (algorithm) {
-    case 'BFS':
-      return runSearch(maze, { algorithm, frontier: 'fifo', useHeuristic: false })
-    case 'DFS':
-      return runSearch(maze, { algorithm, frontier: 'lifo', useHeuristic: false })
-    case 'UCS':
-      return runSearch(maze, { algorithm, frontier: 'ucs', useHeuristic: false })
-    case 'Greedy':
-      return runSearch(maze, { algorithm, frontier: 'greedy', useHeuristic: true })
-    case 'A*':
-      return runSearch(maze, { algorithm, frontier: 'astar', useHeuristic: true })
-  }
+  return runSearch(maze, engineOptionsFor(algorithm))
 }
 
 export { heuristic } from './heuristic'
+export { runSearch, runSearchAsync } from './engine'
+export { engineOptionsFor } from './options'

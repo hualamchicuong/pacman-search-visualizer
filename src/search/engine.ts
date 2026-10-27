@@ -15,12 +15,14 @@ import { heuristic } from './heuristic'
 
 type FrontierKind = 'fifo' | 'lifo' | 'ucs' | 'greedy' | 'astar'
 
-interface EngineOptions {
+export interface EngineOptions {
   algorithm: AlgorithmId
   frontier: FrontierKind
   useHeuristic: boolean
   maxExpanded?: number
   maxRecordedSteps?: number
+  /** Polled during search (sync or async); return true to abort */
+  shouldCancel?: () => boolean
 }
 
 /** Binary min-heap keyed by score(node); stable by insertion order on ties. */
@@ -260,10 +262,24 @@ class TraceRecorder {
   }
 }
 
-export function runSearch(maze: Maze, options: EngineOptions): SearchResult {
-  const t0 = performance.now()
-  const maxExpanded = options.maxExpanded ?? 150_000
-  const maxRecordedSteps = options.maxRecordedSteps ?? 6_000
+function yieldMacrotask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+type SearchCtx = {
+  options: EngineOptions
+  maze: Maze
+  t0: number
+  maxExpanded: number
+  open: Frontier
+  bestG: Map<string, number>
+  closedKeys: Set<string>
+  trace: TraceRecorder
+  nodesExpanded: number
+  nodesGenerated: number
+}
+
+function beginSearch(maze: Maze, options: EngineOptions): SearchCtx {
   const startState = initialState(maze)
   const h0 = options.useHeuristic ? heuristic(maze, startState) : 0
   const root: SearchNode = {
@@ -274,98 +290,154 @@ export function runSearch(maze: Maze, options: EngineOptions): SearchResult {
     parent: null,
     action: null,
   }
-
   const open = new Frontier(options.frontier)
   open.push(root)
-
   const bestG = new Map<string, number>()
   bestG.set(stateKey(startState), 0)
-
-  const closedKeys = new Set<string>()
-  const trace = new TraceRecorder(maxRecordedSteps)
-  let nodesExpanded = 0
-  let nodesGenerated = 1
-  let goalNode: SearchNode | null = null
-  let termination: TerminationReason = 'exhausted'
-
-  while (open.size > 0) {
-    const node = open.pop()!
-    const key = stateKey(node.state)
-
-    const known = bestG.get(key)
-    if (known !== undefined && node.g > known) continue
-    if (closedKeys.has(key)) continue
-
-    closedKeys.add(key)
-    nodesExpanded++
-
-    if (isGoal(node.state)) {
-      const openCells = open.snapshotCells()
-      const closedCells = closedCellsFrom(closedKeys)
-      const steps = trace.finishWithGoal(node, openCells, closedCells)
-      goalNode = node
-      termination = 'goal'
-      return finish(
-        options,
-        maze,
-        t0,
-        nodesExpanded,
-        nodesGenerated,
-        goalNode,
-        steps,
-        termination,
-        trace.stats,
-      )
-    }
-
-    for (const { action, state, cost } of successors(maze, node.state)) {
-      const childG = node.g + cost
-      const childKey = stateKey(state)
-      const prev = bestG.get(childKey)
-      if (prev !== undefined && childG >= prev) continue
-      if (closedKeys.has(childKey)) {
-        if (options.frontier === 'fifo' || options.frontier === 'lifo') continue
-        closedKeys.delete(childKey)
-      }
-
-      bestG.set(childKey, childG)
-      const h = options.useHeuristic ? heuristic(maze, state) : 0
-      const child: SearchNode = {
-        state,
-        g: childG,
-        h,
-        f: childG + h,
-        parent: node,
-        action,
-      }
-      open.push(child)
-      nodesGenerated++
-    }
-
-    if (trace.acceptExpand()) {
-      trace.storeExpand(node, open.snapshotCells(), closedCellsFrom(closedKeys))
-    }
-
-    if (nodesExpanded >= maxExpanded) {
-      termination = 'limit'
-      break
-    }
-  }
-
-  if (termination !== 'limit') termination = 'exhausted'
-
-  const steps = trace.finishWithoutGoal()
-  return finish(
+  return {
     options,
     maze,
-    t0,
-    nodesExpanded,
-    nodesGenerated,
+    t0: performance.now(),
+    maxExpanded: options.maxExpanded ?? 150_000,
+    open,
+    bestG,
+    closedKeys: new Set<string>(),
+    trace: new TraceRecorder(options.maxRecordedSteps ?? 6_000),
+    nodesExpanded: 0,
+    nodesGenerated: 1,
+  }
+}
+
+/** One expansion step. Returns a finished result, or null to continue. */
+function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null {
+  if (ctx.options.shouldCancel?.()) return 'cancelled'
+  if (ctx.open.size === 0) return null
+
+  const node = ctx.open.pop()!
+  const key = stateKey(node.state)
+  const known = ctx.bestG.get(key)
+  if (known !== undefined && node.g > known) return null
+  if (ctx.closedKeys.has(key)) return null
+
+  ctx.closedKeys.add(key)
+  ctx.nodesExpanded++
+
+  if (isGoal(node.state)) {
+    const steps = ctx.trace.finishWithGoal(
+      node,
+      ctx.open.snapshotCells(),
+      closedCellsFrom(ctx.closedKeys),
+    )
+    return finish(
+      ctx.options,
+      ctx.maze,
+      ctx.t0,
+      ctx.nodesExpanded,
+      ctx.nodesGenerated,
+      node,
+      steps,
+      'goal',
+      ctx.trace.stats,
+    )
+  }
+
+  for (const { action, state, cost } of successors(ctx.maze, node.state)) {
+    const childG = node.g + cost
+    const childKey = stateKey(state)
+    const prev = ctx.bestG.get(childKey)
+    if (prev !== undefined && childG >= prev) continue
+    if (ctx.closedKeys.has(childKey)) {
+      if (ctx.options.frontier === 'fifo' || ctx.options.frontier === 'lifo') continue
+      ctx.closedKeys.delete(childKey)
+    }
+    ctx.bestG.set(childKey, childG)
+    const h = ctx.options.useHeuristic ? heuristic(ctx.maze, state) : 0
+    ctx.open.push({
+      state,
+      g: childG,
+      h,
+      f: childG + h,
+      parent: node,
+      action,
+    })
+    ctx.nodesGenerated++
+  }
+
+  if (ctx.trace.acceptExpand()) {
+    ctx.trace.storeExpand(
+      node,
+      ctx.open.snapshotCells(),
+      closedCellsFrom(ctx.closedKeys),
+    )
+  }
+
+  if (ctx.nodesExpanded >= ctx.maxExpanded) return 'limit'
+  return null
+}
+
+function endSearch(
+  ctx: SearchCtx,
+  termination: TerminationReason,
+  goalNode: SearchNode | null = null,
+): SearchResult {
+  const steps =
+    goalNode && termination === 'goal'
+      ? ctx.trace.finishWithGoal(
+          goalNode,
+          ctx.open.snapshotCells(),
+          closedCellsFrom(ctx.closedKeys),
+        )
+      : ctx.trace.finishWithoutGoal()
+  return finish(
+    ctx.options,
+    ctx.maze,
+    ctx.t0,
+    ctx.nodesExpanded,
+    ctx.nodesGenerated,
     goalNode,
     steps,
     termination,
-    trace.stats,
+    ctx.trace.stats,
   )
+}
+
+/** Sync search (scripts / Node). */
+export function runSearch(maze: Maze, options: EngineOptions): SearchResult {
+  const ctx = beginSearch(maze, options)
+  for (;;) {
+    if (ctx.open.size === 0) return endSearch(ctx, 'exhausted')
+    const out = stepSearch(ctx)
+    if (out === null) continue
+    if (out === 'cancelled') return endSearch(ctx, 'cancelled')
+    if (out === 'limit') return endSearch(ctx, 'limit')
+    return out
+  }
+}
+
+/**
+ * Async search for Web Worker: yields every `yieldEvery` expands so cancel
+ * messages can be processed on the worker event loop.
+ */
+export async function runSearchAsync(
+  maze: Maze,
+  options: EngineOptions,
+  yieldEvery = 256,
+): Promise<SearchResult> {
+  const ctx = beginSearch(maze, options)
+  for (;;) {
+    if (ctx.open.size === 0) return endSearch(ctx, 'exhausted')
+    const out = stepSearch(ctx)
+    if (out === null) {
+      if (ctx.nodesExpanded > 0 && ctx.nodesExpanded % yieldEvery === 0) {
+        await yieldMacrotask()
+        if (ctx.options.shouldCancel?.()) return endSearch(ctx, 'cancelled')
+      }
+      continue
+    }
+    if (out === 'cancelled') return endSearch(ctx, 'cancelled')
+    if (out === 'limit') return endSearch(ctx, 'limit')
+    return out
+  }
 }
 
 function finish(

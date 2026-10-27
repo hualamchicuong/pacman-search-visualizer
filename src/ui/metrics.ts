@@ -11,6 +11,7 @@ function optLabel(v: boolean | 'conditional'): string {
 function terminationLabel(m: SearchMetrics): string {
   if (m.terminationReason === 'goal') return 'goal'
   if (m.terminationReason === 'limit') return 'hit expand limit'
+  if (m.terminationReason === 'cancelled') return 'cancelled'
   return 'OPEN exhausted'
 }
 
@@ -181,7 +182,9 @@ function singleInsightHtml(m: SearchMetrics, maze: Maze | null): string {
     const why =
       m.terminationReason === 'limit'
         ? `dừng vì <strong>giới hạn mở rộng</strong> (${m.nodesExpanded} nút) — OPEN có thể vẫn còn.`
-        : `OPEN đã <strong>cạn</strong> (${m.nodesExpanded} nút) — thường do food unreachable / không còn successor.`
+        : m.terminationReason === 'cancelled'
+          ? `bị <strong>hủy</strong> giữa chừng (${m.nodesExpanded} nút đã expand).`
+          : `OPEN đã <strong>cạn</strong> (${m.nodesExpanded} nút) — thường do food unreachable / không còn successor.`
     return `
       <div class="insight-block">
         <h4>Kết quả</h4>

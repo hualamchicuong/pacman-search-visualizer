@@ -1,7 +1,6 @@
 import './style.css'
 import { getMap, setCustomMap } from './maps'
 import { generateMaze, GenerateError } from './maps/generate'
-import { solve } from './search'
 import { stateKey, type SearchResult } from './core/types'
 import { CanvasRenderer } from './viz/canvasRenderer'
 import { TracePlayer } from './viz/player'
@@ -9,6 +8,12 @@ import { TreeRenderer } from './viz/treeRenderer'
 import { buildSearchTree } from './viz/searchTree'
 import { bindControls } from './ui/controls'
 import { renderInsight, renderMetrics } from './ui/metrics'
+import {
+  cancelAllSearches,
+  SearchCancelledError,
+  solveAsync,
+  solveCompareAsync,
+} from './search/searchClient'
 
 const canvasA = document.querySelector('#canvas-a') as HTMLCanvasElement
 const canvasB = document.querySelector('#canvas-b') as HTMLCanvasElement
@@ -204,19 +209,20 @@ playerB.onChange(() => {
   if (controls.get().mode === 'compare') redraw()
 })
 
-function run(): void {
-  try {
-    const state = controls.get()
-    const maze = getMap(state.mapId)
-    if (!maze) {
-      insightEl.innerHTML = `<p class="insight-empty">Unknown map: ${state.mapId}</p>`
-      return
-    }
-    playerA.pause()
-    playerB.pause()
+async function run(): Promise<void> {
+  const state = controls.get()
+  const maze = getMap(state.mapId)
+  if (!maze) {
+    insightEl.innerHTML = `<p class="insight-empty">Unknown map: ${state.mapId}</p>`
+    return
+  }
+  playerA.pause()
+  playerB.pause()
+  controls.setSearchBusy(true, state.mode === 'compare' ? 'Searching (compare)…' : 'Searching…')
 
+  try {
     if (state.mode === 'single') {
-      const result = solve(maze, state.algorithm)
+      const result = await solveAsync(maze, state.algorithm)
       lastResults = [result]
       titleA.textContent = state.algorithm
       playerA.setResult(result)
@@ -224,8 +230,7 @@ function run(): void {
       treeA.setTree(buildSearchTree(result))
       treeB.clear()
     } else {
-      const a = solve(maze, state.algorithmA)
-      const b = solve(maze, state.algorithmB)
+      const [a, b] = await solveCompareAsync(maze, state.algorithmA, state.algorithmB)
       lastResults = [a, b]
       titleA.textContent = state.algorithmA
       titleB.textContent = state.algorithmB
@@ -241,9 +246,22 @@ function run(): void {
     playerA.play()
     if (state.mode === 'compare') playerB.play()
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    insightEl.innerHTML = `<p class="insight-empty">Error while running search: ${msg}</p>`
-    console.error(err)
+    if (err instanceof SearchCancelledError) {
+      insightEl.innerHTML = `<p class="insight-empty">Search <strong>đã hủy</strong>. Nhấn Run để chạy lại.</p>`
+      lastResults = []
+      playerA.setResult(null)
+      playerB.setResult(null)
+      treeA.clear()
+      treeB.clear()
+      renderMetrics(metricsEl, [])
+      drawIdle()
+    } else {
+      const msg = err instanceof Error ? err.message : String(err)
+      insightEl.innerHTML = `<p class="insight-empty">Error while running search: ${msg}</p>`
+      console.error(err)
+    }
+  } finally {
+    controls.setSearchBusy(false)
   }
 }
 
@@ -255,9 +273,11 @@ controls.els.btnGenerate.addEventListener('click', () => {
       foodCount: form.foodCount,
       startExits: form.startExits,
       foodsAtCorners: form.foodsAtCorners,
+      seed: form.seed,
     })
     setCustomMap(result.maze)
     controls.refreshMapSelect('custom')
+    controls.els.genSeed.value = String(result.seed)
     const cornerNote = result.foodsAtCorners ? ', foods@4-corners' : ''
     controls.setGenerateStatus(
       `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}, seed=${result.seed}. Press Run.`,
@@ -275,7 +295,17 @@ controls.els.btnGenerate.addEventListener('click', () => {
   }
 })
 
-controls.els.btnRun.addEventListener('click', run)
+controls.els.btnRun.addEventListener('click', () => {
+  void run()
+})
+
+controls.els.btnCancel.addEventListener('click', () => {
+  cancelAllSearches()
+  controls.setSearchBusy(true, 'Cancelling…')
+})
+
+controls.els.btnFitA.addEventListener('click', () => treeA.fitToView())
+controls.els.btnFitB.addEventListener('click', () => treeB.fitToView())
 
 controls.els.btnPlay.addEventListener('click', () => {
   const compare = controls.get().mode === 'compare'

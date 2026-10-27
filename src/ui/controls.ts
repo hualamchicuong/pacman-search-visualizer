@@ -25,6 +25,8 @@ export interface GenerateFormState {
   foodCount: number
   startExits: 2 | 3 | 4
   foodsAtCorners: boolean
+  /** Undefined → random seed */
+  seed?: number
 }
 
 function fillSelect(el: HTMLSelectElement, values: string[], selected?: string): void {
@@ -40,6 +42,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   refreshMapSelect: (selectId?: string) => void
   setGenerateHint: (text: string) => void
   setGenerateStatus: (text: string, kind: 'ok' | 'err' | 'clear') => void
+  setSearchBusy: (busy: boolean, status?: string) => void
   els: {
     mapSelect: HTMLSelectElement
     modeSelect: HTMLSelectElement
@@ -49,17 +52,22 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     algoBSelect: HTMLSelectElement
     speedRange: HTMLInputElement
     btnRun: HTMLButtonElement
+    btnCancel: HTMLButtonElement
     btnPlay: HTMLButtonElement
     btnReset: HTMLButtonElement
     btnStep: HTMLButtonElement
     btnStepBack: HTMLButtonElement
     btnGenerate: HTMLButtonElement
+    btnFitA: HTMLButtonElement
+    btnFitB: HTMLButtonElement
     genSize: HTMLSelectElement
     genFoods: HTMLInputElement
     genCorners: HTMLInputElement
     genExits: HTMLSelectElement
+    genSeed: HTMLInputElement
     genHint: HTMLElement
     genStatus: HTMLElement
+    runStatus: HTMLElement
     algoField: HTMLElement
     compareFields: HTMLElement[]
   }
@@ -72,17 +80,22 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const algoBSelect = document.querySelector('#algo-b-select') as HTMLSelectElement
   const speedRange = document.querySelector('#speed-range') as HTMLInputElement
   const btnRun = document.querySelector('#btn-run') as HTMLButtonElement
+  const btnCancel = document.querySelector('#btn-cancel') as HTMLButtonElement
   const btnPlay = document.querySelector('#btn-play') as HTMLButtonElement
   const btnReset = document.querySelector('#btn-reset') as HTMLButtonElement
   const btnStep = document.querySelector('#btn-step') as HTMLButtonElement
   const btnStepBack = document.querySelector('#btn-step-back') as HTMLButtonElement
   const btnGenerate = document.querySelector('#btn-generate') as HTMLButtonElement
+  const btnFitA = document.querySelector('#btn-fit-a') as HTMLButtonElement
+  const btnFitB = document.querySelector('#btn-fit-b') as HTMLButtonElement
   const genSize = document.querySelector('#gen-size') as HTMLSelectElement
   const genFoods = document.querySelector('#gen-foods') as HTMLInputElement
   const genCorners = document.querySelector('#gen-corners') as HTMLInputElement
   const genExits = document.querySelector('#gen-exits') as HTMLSelectElement
+  const genSeed = document.querySelector('#gen-seed') as HTMLInputElement
   const genHint = document.querySelector('#gen-hint') as HTMLElement
   const genStatus = document.querySelector('#gen-status') as HTMLElement
+  const runStatus = document.querySelector('#run-status') as HTMLElement
   const algoField = document.querySelector('#algo-field') as HTMLElement
   const compareFields = [
     document.querySelector('#algo-a-field') as HTMLElement,
@@ -104,12 +117,35 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     speed: Number(speedRange.value),
   })
 
-  const getGenerate = (): GenerateFormState => ({
-    size: genSize.value as MapSizeId,
-    foodCount: genCorners.checked ? 4 : Number(genFoods.value),
-    startExits: Number(genExits.value) as 2 | 3 | 4,
-    foodsAtCorners: genCorners.checked,
-  })
+  const getGenerate = (): GenerateFormState => {
+    const raw = genSeed.value.trim()
+    const parsed = raw === '' ? NaN : Number(raw)
+    return {
+      size: genSize.value as MapSizeId,
+      foodCount: genCorners.checked ? 4 : Number(genFoods.value),
+      startExits: Number(genExits.value) as 2 | 3 | 4,
+      foodsAtCorners: genCorners.checked,
+      seed: Number.isFinite(parsed) ? Math.trunc(parsed) : undefined,
+    }
+  }
+
+  const setSearchBusy = (busy: boolean, status?: string): void => {
+    btnRun.disabled = busy
+    btnGenerate.disabled = busy
+    mapSelect.disabled = busy
+    modeSelect.disabled = busy
+    algoSelect.disabled = busy
+    algoASelect.disabled = busy
+    algoBSelect.disabled = busy
+    btnCancel.classList.toggle('hidden', !busy)
+    if (busy) {
+      runStatus.hidden = false
+      runStatus.textContent = status ?? 'Searching…'
+    } else {
+      runStatus.hidden = true
+      runStatus.textContent = ''
+    }
+  }
 
   const setGenerateHint = (text: string): void => {
     genHint.textContent = text
@@ -189,6 +225,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     refreshMapSelect,
     setGenerateHint,
     setGenerateStatus,
+    setSearchBusy,
     els: {
       mapSelect,
       modeSelect,
@@ -198,17 +235,22 @@ export function bindControls(onChange?: (s: ControlState) => void): {
       algoBSelect,
       speedRange,
       btnRun,
+      btnCancel,
       btnPlay,
       btnReset,
       btnStep,
       btnStepBack,
       btnGenerate,
+      btnFitA,
+      btnFitB,
       genSize,
       genFoods,
       genCorners,
       genExits,
+      genSeed,
       genHint,
       genStatus,
+      runStatus,
       algoField,
       compareFields,
     },

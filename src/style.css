@@ -239,6 +239,43 @@ h1 {
   filter: brightness(1.05);
 }
 
+.btn.danger {
+  background: color-mix(in srgb, var(--danger) 22%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: #ffb4b4;
+}
+
+.btn.danger:hover {
+  filter: brightness(1.08);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-fit {
+  height: 26px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tree-block .panel-head {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.run-status {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .playback {
   display: flex;
   flex-direction: row;

@@ -74,6 +74,10 @@
                 <option value="4" selected>4 paths</option>
               </select>
             </label>
+            <label class="field">
+              <span>Seed</span>
+              <input id="gen-seed" type="number" placeholder="auto" />
+            </label>
             <p class="gen-hint" id="gen-hint">Max foods: 20 (open cells − 1, cap 20)</p>
             <button type="button" id="btn-generate" class="btn btn-block">Generate map</button>
             <p class="gen-status" id="gen-status" hidden></p>
@@ -108,6 +112,8 @@
           </label>
 
           <button type="button" id="btn-run" class="btn primary btn-block">Run</button>
+          <button type="button" id="btn-cancel" class="btn btn-block danger hidden">Cancel</button>
+          <p class="run-status" id="run-status" hidden></p>
 
           <div class="toolbar-divider"></div>
           <p class="toolbar-title">Playback</p>
@@ -141,6 +147,7 @@
                   <div class="tree-block">
                     <div class="panel-head">
                       <h2>Search tree</h2>
+                      <button type="button" id="btn-fit-a" class="btn btn-fit" title="Fit tree to view">Fit</button>
                     </div>
                     <div class="tree-viewport" id="tree-a"></div>
                     <p class="tree-caption" id="tree-a-caption"></p>
@@ -160,6 +167,7 @@
                   <div class="tree-block">
                     <div class="panel-head">
                       <h2>Search tree</h2>
+                      <button type="button" id="btn-fit-b" class="btn btn-fit" title="Fit tree to view">Fit</button>
                     </div>
                     <div class="tree-viewport" id="tree-b"></div>
                     <p class="tree-caption" id="tree-b-caption"></p>

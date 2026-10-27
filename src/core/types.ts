@@ -32,7 +32,7 @@ export interface StepEvent {
 }
 
 /** Why the search loop stopped */
-export type TerminationReason = 'goal' | 'exhausted' | 'limit'
+export type TerminationReason = 'goal' | 'exhausted' | 'limit' | 'cancelled'
 
 export interface SearchMetrics {
   algorithm: AlgorithmId
