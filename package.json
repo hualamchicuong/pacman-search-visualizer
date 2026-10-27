@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "tsx scripts/verify-algorithms.ts",
+    "test:edge": "tsx scripts/edge-cases.ts"
   },
   "devDependencies": {
     "typescript": "~5.7.2",

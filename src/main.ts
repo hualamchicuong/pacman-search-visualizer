@@ -247,14 +247,8 @@ async function run(): Promise<void> {
     if (state.mode === 'compare') playerB.play()
   } catch (err) {
     if (err instanceof SearchCancelledError) {
+      clearRun()
       insightEl.innerHTML = `<p class="insight-empty">Search <strong>đã hủy</strong>. Nhấn Run để chạy lại.</p>`
-      lastResults = []
-      playerA.setResult(null)
-      playerB.setResult(null)
-      treeA.clear()
-      treeB.clear()
-      renderMetrics(metricsEl, [])
-      drawIdle()
     } else {
       const msg = err instanceof Error ? err.message : String(err)
       insightEl.innerHTML = `<p class="insight-empty">Error while running search: ${msg}</p>`

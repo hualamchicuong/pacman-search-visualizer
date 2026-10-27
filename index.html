@@ -76,7 +76,7 @@
             </label>
             <p class="gen-hint" id="gen-hint">Max foods: 20 (open cells − 1, cap 20)</p>
             <button type="button" id="btn-generate" class="btn btn-block">Generate map</button>
-            <p class="gen-status" id="gen-status" hidden></p>
+            <p class="gen-status" id="gen-status" role="status" aria-live="polite" hidden></p>
           </div>
 
           <label class="field">
@@ -109,7 +109,7 @@
 
           <button type="button" id="btn-run" class="btn primary btn-block">Run</button>
           <button type="button" id="btn-cancel" class="btn btn-block danger hidden">Cancel</button>
-          <p class="run-status" id="run-status" hidden></p>
+          <p class="run-status" id="run-status" role="status" aria-live="polite" hidden></p>
 
           <div class="toolbar-divider"></div>
           <p class="toolbar-title">Playback</p>
@@ -202,7 +202,7 @@
             </section>
             <section class="card insight-card">
               <h3>Insight</h3>
-              <div id="insight" class="insight"></div>
+              <div id="insight" class="insight" role="status" aria-live="polite"></div>
             </section>
           </aside>
         </main>
