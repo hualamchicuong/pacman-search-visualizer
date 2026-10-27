@@ -273,14 +273,12 @@ controls.els.btnGenerate.addEventListener('click', () => {
       foodCount: form.foodCount,
       startExits: form.startExits,
       foodsAtCorners: form.foodsAtCorners,
-      seed: form.seed,
     })
     setCustomMap(result.maze)
     controls.refreshMapSelect('custom')
-    controls.els.genSeed.value = String(result.seed)
     const cornerNote = result.foodsAtCorners ? ', foods@4-corners' : ''
     controls.setGenerateStatus(
-      `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}, seed=${result.seed}. Press Run.`,
+      `OK — ${form.size}, ${result.maze.foods.length} foods${cornerNote}, start exits=${result.startExits}, open=${result.openCells}. Press Run.`,
       'ok',
     )
     clearRun()

@@ -80,7 +80,7 @@ h1 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: 0.85rem;
   align-items: start;
 }
@@ -223,6 +223,7 @@ h1 {
 
 .btn-block {
   width: 100%;
+  white-space: nowrap;
 }
 
 .btn:hover {

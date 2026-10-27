@@ -25,8 +25,6 @@ export interface GenerateFormState {
   foodCount: number
   startExits: 2 | 3 | 4
   foodsAtCorners: boolean
-  /** Undefined → random seed */
-  seed?: number
 }
 
 function fillSelect(el: HTMLSelectElement, values: string[], selected?: string): void {
@@ -64,7 +62,6 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     genFoods: HTMLInputElement
     genCorners: HTMLInputElement
     genExits: HTMLSelectElement
-    genSeed: HTMLInputElement
     genHint: HTMLElement
     genStatus: HTMLElement
     runStatus: HTMLElement
@@ -92,7 +89,6 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const genFoods = document.querySelector('#gen-foods') as HTMLInputElement
   const genCorners = document.querySelector('#gen-corners') as HTMLInputElement
   const genExits = document.querySelector('#gen-exits') as HTMLSelectElement
-  const genSeed = document.querySelector('#gen-seed') as HTMLInputElement
   const genHint = document.querySelector('#gen-hint') as HTMLElement
   const genStatus = document.querySelector('#gen-status') as HTMLElement
   const runStatus = document.querySelector('#run-status') as HTMLElement
@@ -117,17 +113,12 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     speed: Number(speedRange.value),
   })
 
-  const getGenerate = (): GenerateFormState => {
-    const raw = genSeed.value.trim()
-    const parsed = raw === '' ? NaN : Number(raw)
-    return {
-      size: genSize.value as MapSizeId,
-      foodCount: genCorners.checked ? 4 : Number(genFoods.value),
-      startExits: Number(genExits.value) as 2 | 3 | 4,
-      foodsAtCorners: genCorners.checked,
-      seed: Number.isFinite(parsed) ? Math.trunc(parsed) : undefined,
-    }
-  }
+  const getGenerate = (): GenerateFormState => ({
+    size: genSize.value as MapSizeId,
+    foodCount: genCorners.checked ? 4 : Number(genFoods.value),
+    startExits: Number(genExits.value) as 2 | 3 | 4,
+    foodsAtCorners: genCorners.checked,
+  })
 
   const setSearchBusy = (busy: boolean, status?: string): void => {
     btnRun.disabled = busy
@@ -247,7 +238,6 @@ export function bindControls(onChange?: (s: ControlState) => void): {
       genFoods,
       genCorners,
       genExits,
-      genSeed,
       genHint,
       genStatus,
       runStatus,
