@@ -18,6 +18,7 @@ export class TreeRenderer {
   private highlightId: string | null = null
   /** Full chronological exploration tree */
   private fullTree: TreeNode | null = null
+  private solutionTree: TreeNode | null = null
   /** Currently painted (possibly filtered) tree */
   private tree: TreeNode | null = null
   private contentW = 1
@@ -74,6 +75,7 @@ export class TreeRenderer {
 
   clear(message = 'Nhấn Run — cây sẽ mọc theo thứ tự mở rộng của thuật toán.'): void {
     this.fullTree = null
+    this.solutionTree = null
     this.tree = null
     this.highlightId = null
     this.lastProgress = -1
@@ -107,7 +109,8 @@ export class TreeRenderer {
   }
 
   /** Store full exploration tree; start at progress 0 (root only as search begins). */
-  setTree(root: TreeNode | null): void {
+  setTree(root: TreeNode | null, solution: TreeNode | null = root): void {
+    this.solutionTree = solution
     this.fullTree = root
     this.highlightId = null
     this.lastProgress = -1
@@ -138,7 +141,8 @@ export class TreeRenderer {
       ? { scale: this.scale, panX: this.panX, panY: this.panY }
       : null
 
-    let visible = filterTreeByStep(this.fullTree, step)
+    const activeTree = revealPath ? (this.solutionTree ?? this.fullTree) : this.fullTree
+    let visible = filterTreeByStep(activeTree, step)
     if (!revealPath) {
       visible = mapTree(visible, (n) => ({
         ...n,

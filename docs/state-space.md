@@ -88,7 +88,7 @@ $$
 - `complete` / `optimal` trên bảng là **tính chất lý thuyết**, không phải đảm bảo của lần chạy bị cutoff
 - Trace có thể **lấy mẫu** (reservoir) nếu expand rất nhiều; heatmap OPEN/CLOSED trên maze là projection theo **vị trí ô**, không phải tập state đầy đủ
 
-**Search tree:** giữ thứ tự khám phá (cap ~90 nút đầu); khi tìm thấy goal sẽ **gắn thêm** chuỗi path/goal dù cây bị cắt.
+**Search tree:** giữ thứ tự khám phá (cap ~90 nút đầu). State được reopen có occurrence riêng theo state + g, giữ parent lịch sử. Playback dùng cây exploration riêng; đến giai đoạn lời giải mới hiện cây bổ sung path/goal, không rewire ngược các bước khám phá.
 
 ---
 

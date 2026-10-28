@@ -1,11 +1,11 @@
 import './style.css'
 import { getMap, setCustomMap } from './maps'
 import { generateMaze, GenerateError } from './maps/generate'
-import { stateKey, type SearchResult } from './core/types'
+import type { SearchResult } from './core/types'
 import { CanvasRenderer } from './viz/canvasRenderer'
 import { TracePlayer } from './viz/player'
 import { TreeRenderer } from './viz/treeRenderer'
-import { buildSearchTree } from './viz/searchTree'
+import { buildSearchTree, searchNodeId } from './viz/searchTree'
 import { bindControls } from './ui/controls'
 import { renderInsight, renderMetrics } from './ui/metrics'
 import {
@@ -124,9 +124,9 @@ function highlightId(result: SearchResult | null, player: TracePlayer): string |
   if (!result) return null
   if (frame.showPath && result.path.length > 0) {
     const n = result.path[Math.min(frame.pathIndex, result.path.length - 1)]
-    return stateKey(n.state)
+    return searchNodeId(n)
   }
-  if (frame.event?.node) return stateKey(frame.event.node.state)
+  if (frame.event?.node) return searchNodeId(frame.event.node)
   return null
 }
 
@@ -227,7 +227,7 @@ async function run(): Promise<void> {
       titleA.textContent = state.algorithm
       playerA.setResult(result)
       playerB.setResult(null)
-      treeA.setTree(buildSearchTree(result))
+      treeA.setTree(buildSearchTree(result, undefined, false), buildSearchTree(result))
       treeB.clear()
     } else {
       const [a, b] = await solveCompareAsync(maze, state.algorithmA, state.algorithmB)
@@ -236,8 +236,8 @@ async function run(): Promise<void> {
       titleB.textContent = state.algorithmB
       playerA.setResult(a)
       playerB.setResult(b)
-      treeA.setTree(buildSearchTree(a))
-      treeB.setTree(buildSearchTree(b))
+      treeA.setTree(buildSearchTree(a, undefined, false), buildSearchTree(a))
+      treeB.setTree(buildSearchTree(b, undefined, false), buildSearchTree(b))
     }
 
     renderMetrics(metricsEl, lastResults)

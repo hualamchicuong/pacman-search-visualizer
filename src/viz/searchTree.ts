@@ -40,160 +40,78 @@ function subLabel(n: SearchNode, informed: boolean): string {
   return `g=${n.g}  F${foods}`
 }
 
+/** Strict best-g filtering makes state + g unique for each accepted occurrence. */
+export function searchNodeId(node: SearchNode): string {
+  return stateKey(node.state) + '@' + node.g
+}
+
 /**
- * Build search tree from ACTUAL expansion order (as the algorithm explores).
- * Does NOT prefer the solution path during exploration — path is force-injected after.
- *
- * Reopen-safe: one node per stateKey, exclusive single parent; solution path FORCE-replaces.
- *
- * @param upToStep inclusive step index in result.steps (for grow-as-you-search UI)
+ * Build a chronological exploration tree. Reopened states retain separate
+ * occurrences and their original parent/g. Solution injection never rewires history.
+ * Set includeSolution=false for the exploration phase of playback.
  */
 export function buildSearchTree(
   result: SearchResult | null,
   upToStep?: number,
+  includeSolution = true,
 ): TreeNode | null {
   if (!result || result.steps.length === 0) return null
-
   const informed = result.algorithm === 'Greedy' || result.algorithm === 'A*'
-  const pathKeys = new Set(result.path.map((n) => stateKey(n.state)))
-  const goalKey = result.found ? stateKey(result.path[result.path.length - 1]!.state) : null
-
-  const lastStep = Math.min(
-    upToStep ?? result.steps.length - 1,
-    result.steps.length - 1,
-  )
-
-  const byKey = new Map<string, SearchNode>()
+  const pathIds = new Set(includeSolution ? result.path.map(searchNodeId) : [])
+  const goalId = includeSolution && result.found
+    ? searchNodeId(result.path[result.path.length - 1]!) : null
+  const lastStep = Math.min(upToStep ?? result.steps.length - 1, result.steps.length - 1)
+  const byId = new Map<string, SearchNode>()
   const discoveredAt = new Map<string, number>()
-  const childOrder = new Map<string, string[]>()
-  /** childKey → parentKey (exclusive) */
-  const parentOf = new Map<string, string>()
+  const children = new Map<string, string[]>()
 
-  const rewireParent = (childKey: string, parentKey: string): void => {
-    const prev = parentOf.get(childKey)
-    if (prev === parentKey) {
-      const list = childOrder.get(parentKey) ?? []
-      if (!list.includes(childKey)) {
-        list.push(childKey)
-        childOrder.set(parentKey, list)
-      }
-      return
-    }
-    if (prev) {
-      const oldList = childOrder.get(prev)
-      if (oldList) {
-        childOrder.set(
-          prev,
-          oldList.filter((k) => k !== childKey),
-        )
-      }
-    }
-    parentOf.set(childKey, parentKey)
-    const list = childOrder.get(parentKey) ?? []
-    if (!list.includes(childKey)) list.push(childKey)
-    childOrder.set(parentKey, list)
-  }
-
-  const hasParent = (childKey: string): boolean => parentOf.has(childKey)
-
-  /**
-   * @param force when true (solution inject), replace payload + rewire parent to this chain
-   */
-  const ensure = (node: SearchNode, at: number, force: boolean): void => {
+  const ensure = (node: SearchNode, at: number): void => {
     const chain: SearchNode[] = []
-    let cur: SearchNode | null = node
-    while (cur) {
-      chain.push(cur)
-      cur = cur.parent
-    }
-    // Root → … → node
+    for (let cur: SearchNode | null = node; cur; cur = cur.parent) chain.push(cur)
     for (let i = chain.length - 1; i >= 0; i--) {
       const n = chain[i]!
-      const k = stateKey(n.state)
-
-      if (!byKey.has(k)) {
-        byKey.set(k, n)
-        discoveredAt.set(k, at)
-      } else if (force) {
-        byKey.set(k, n)
-      }
-
+      const id = searchNodeId(n)
+      if (byId.has(id)) continue
+      byId.set(id, n)
+      discoveredAt.set(id, at)
       if (n.parent) {
-        const pk = stateKey(n.parent.state)
-        if (!byKey.has(pk)) {
-          // Parent should already be in byKey from earlier in this chain walk
-          continue
-        }
-
-        if (force) {
-          // Path always wins: upgrade parent payload + exclusive rewire
-          byKey.set(pk, n.parent)
-          rewireParent(k, pk)
-        } else if (!hasParent(k)) {
-          // First parent only; upgrade stale parent object if worse g
-          const existingParent = byKey.get(pk)!
-          if (existingParent.g > n.parent.g) {
-            byKey.set(pk, n.parent)
-          }
-          rewireParent(k, pk)
-        }
-        // else: already has a parent — do not add a second edge (reopen-safe)
+        const parentId = searchNodeId(n.parent)
+        const list = children.get(parentId) ?? []
+        list.push(id)
+        children.set(parentId, list)
       }
     }
   }
-
   for (let i = 0; i <= lastStep; i++) {
-    ensure(result.steps[i]!.node, i, false)
-    if (byKey.size >= MAX_TREE_NODES) break
+    ensure(result.steps[i]!.node, i)
+    if (byId.size >= MAX_TREE_NODES) break
   }
-
-  // Force-inject solution chain / goal (path always wins on those states)
-  if (result.found && result.path.length > 0) {
-    ensure(result.path[result.path.length - 1]!, lastStep, true)
+  if (includeSolution && result.found && result.path.length) {
+    ensure(result.path[result.path.length - 1]!, lastStep)
   }
-
-  let rootKey: string | null = null
-  for (const [k, n] of byKey) {
-    if (!n.parent) {
-      rootKey = k
-      break
-    }
-  }
-  if (!rootKey) {
-    for (const [k, n] of byKey) {
-      if (!n.parent || !byKey.has(stateKey(n.parent.state))) {
-        rootKey = k
-        break
-      }
-    }
-  }
-  if (!rootKey) return null
-
-  const build = (key: string, depth: number): TreeNode => {
-    const n = byKey.get(key)!
-    const kids = (childOrder.get(key) ?? [])
-      .filter((ck) => byKey.has(ck))
-      .map((ck) => build(ck, depth + 1))
+  const root = [...byId.values()].find(n => !n.parent)
+  if (!root) return null
+  const build = (id: string, depth: number): TreeNode => {
+    const n = byId.get(id)!
     return {
-      id: key,
+      id,
       label: shortLabel(n),
       sublabel: subLabel(n, informed),
       g: n.g,
       h: n.h,
-      onPath: pathKeys.has(key),
-      isGoal: key === goalKey,
+      onPath: pathIds.has(id),
+      isGoal: id === goalId,
       isRoot: depth === 0,
-      discoveredAt: discoveredAt.get(key) ?? 0,
-      children: kids,
+      discoveredAt: discoveredAt.get(id) ?? 0,
+      children: (children.get(id) ?? []).map(child => build(child, depth + 1)),
       x: 0,
       y: 0,
       depth,
     }
   }
-
-  const root = build(rootKey, 0)
-  layoutTree(root)
-  return root
+  const tree = build(searchNodeId(root), 0)
+  layoutTree(tree)
+  return tree
 }
 
 /** Tidy layout: leaves left→right in discovery order (no path bias). */

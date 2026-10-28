@@ -2,13 +2,13 @@
  * Edge-case battery for review findings.
  * Run: npx tsx scripts/edge-cases.ts
  */
-import { parseMaze } from '../src/core/maze'
+import { parseMaze, type Maze } from '../src/core/maze'
 import { initialState, isGoal } from '../src/core/problem'
 import { runSearch } from '../src/search/engine'
 import { engineOptionsFor } from '../src/search/options'
 import { solve } from '../src/search'
-import { generateMaze, maxFoodForSize, type MapSizeId } from '../src/maps/generate'
-import { buildSearchTree, flattenTree, MAX_TREE_NODES } from '../src/viz/searchTree'
+import { generateMaze, GenerateError, maxFoodForSize, type MapSizeId } from '../src/maps/generate'
+import { buildSearchTree, flattenTree, filterTreeByStep, searchNodeId, MAX_TREE_NODES } from '../src/viz/searchTree'
 import { MAPS } from '../src/maps'
 
 let failed = 0
@@ -18,6 +18,24 @@ function check(name: string, ok: boolean, detail = ''): void {
     console.log(`  FAIL ${name}${detail ? ' — ' + detail : ''}`)
     failed++
   }
+}
+
+/** Independent connectivity/food check, without trusting generator metadata. */
+function connectedMaze(maze: Maze): boolean {
+  const queue = [maze.start]
+  const seen = new Set([maze.start.x + ',' + maze.start.y])
+  for (let i = 0; i < queue.length; i++) {
+    const { x, y } = queue[i]!
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx!, ny = y + dy!
+      const key = nx + ',' + ny
+      if (nx < 0 || ny < 0 || nx >= maze.width || ny >= maze.height || maze.walls[ny]![nx] || seen.has(key)) continue
+      seen.add(key)
+      queue.push({ x: nx, y: ny })
+    }
+  }
+  const opens = maze.walls.flat().filter(wall => !wall).length
+  return seen.size === opens && maze.foods.every(f => seen.has(f.x + ',' + f.y))
 }
 
 console.log('\n=== 0-food / F-start ===')
@@ -148,20 +166,20 @@ console.log('\n=== Tree path inject on capped maps ===')
       `nodes=${nodes.length} pathColored=${pathColored} cap=${MAX_TREE_NODES}`,
     )
     check(
-      `tree ${id} path nodes ≥ half path`,
-      pathColored >= Math.min(bfs.path.length, Math.floor(bfs.path.length * 0.5)),
+      `tree ${id} contains complete solution`,
+      pathColored === bfs.path.length,
       `${pathColored}/${bfs.path.length}`,
     )
     // Edge g-monotonicity
     let badEdge = 0
     const walk = (n: (typeof nodes)[0]): void => {
       for (const c of n.children) {
-        if (n.g > c.g) badEdge++
+        if (c.g !== n.g + 1) badEdge++
         walk(c)
       }
     }
     walk(tree)
-    check(`tree ${id} no parent.g > child.g`, badEdge === 0, `bad=${badEdge}`)
+    check(`tree ${id} unit-cost tree edges`, badEdge === 0, `bad=${badEdge}`)
   }
 }
 
@@ -189,13 +207,13 @@ console.log('\n=== M1 Greedy reopen tree (seed=24 corners) ===')
       for (const c of n.children) {
         if (seen.has(c.id)) dupChild++
         seen.add(c.id)
-        if (n.g > c.g) badEdge++
+        if (c.g !== n.g + 1) badEdge++
         walk(c)
       }
     }
     walk(tree)
     check('no duplicate child under same parent', dupChild === 0, `dup=${dupChild}`)
-    check('no parent.g > child.g', badEdge === 0, `bad=${badEdge}`)
+    check('unit-cost tree edges', badEdge === 0, `bad=${badEdge}`)
     check('has goal', nodes.some((n) => n.isGoal))
 
     // Path edges exist in tree
@@ -208,6 +226,23 @@ console.log('\n=== M1 Greedy reopen tree (seed=24 corners) ===')
       if (dist !== 1) pathOk = false
     }
     check('greedy path unit steps', pathOk)
+    check('solution edges exist and are colored', greedy.path.slice(1).every((node, i) => {
+      const parent = nodes.find(n => n.id === searchNodeId(greedy.path[i]!))
+      return parent?.onPath && parent.children.some(c => c.id === searchNodeId(node) && c.onPath)
+    }))
+
+    const exploration = buildSearchTree(greedy, undefined, false)!
+    const beforeSolution = JSON.stringify(exploration)
+    const frame = filterTreeByStep(exploration, 18)
+    const current = greedy.steps[18]!.node
+    check('event 19 remains visible before solution reveal',
+      flattenTree(frame).some(n => n.id === searchNodeId(current) && n.g === current.g))
+    check('exploration carries no future path coloring',
+      flattenTree(exploration).every(n => !n.onPath && !n.isGoal))
+    buildSearchTree(greedy)
+    check('solution construction preserves exploration history', JSON.stringify(exploration) === beforeSolution)
+    const back = filterTreeByStep(exploration, 18)
+    check('stepping back restores exploration frame', JSON.stringify(back) === JSON.stringify(frame))
   } catch (err) {
     check('generate seed=24', false, err instanceof Error ? err.message : String(err))
   }
@@ -232,6 +267,7 @@ console.log('\n=== Generator connectivity + corners ===')
             seed,
           })
           genOk++
+          if (!connectedMaze(g.maze)) disconnect++
           // openCells already required connected in generator; re-check start degree
           if (g.startExits !== startExits) {
             check(`degree seed=${seed} ${size} e=${startExits}`, false, `got ${g.startExits}`)
@@ -243,8 +279,8 @@ console.log('\n=== Generator connectivity + corners ===')
     }
   }
   check(
-    'generator success rate (food=4)',
-    genOk >= 100,
+    'generator connected with reachable foods (food=4)',
+    genOk === 225 && genFail === 0 && disconnect === 0,
     `ok=${genOk} fail=${genFail} disconnectSeen=${disconnect}`,
   )
 
@@ -253,9 +289,13 @@ console.log('\n=== Generator connectivity + corners ===')
   let highOk = 0
   for (let seed = 0; seed < 30; seed++) {
     try {
-      generateMaze({ size: 'tiny', foodCount: 14, startExits: 2, seed })
+      const generated = generateMaze({ size: 'tiny', foodCount: 14, startExits: 2, seed })
+      check('high food success respects constraints',
+        connectedMaze(generated.maze) && generated.maze.foods.length === 14)
       highOk++
-    } catch {
+    } catch (err) {
+      check('high food fails with actionable GenerateError',
+        err instanceof GenerateError && /100 tries/.test(err.message))
       highFail++
     }
   }
@@ -278,14 +318,17 @@ console.log('\n=== Generator connectivity + corners ===')
             foodsAtCorners: true,
             seed,
           })
-          if (g.foodsAtCorners && g.maze.foods.length === 4) cornerOk++
+          const slots = new Set(['1,1', (g.maze.width - 2) + ',1', '1,' + (g.maze.height - 2), (g.maze.width - 2) + ',' + (g.maze.height - 2)])
+          if (g.foodsAtCorners && g.maze.foods.length === 4 && connectedMaze(g.maze) &&
+              g.maze.foods.every(f => slots.has(f.x + ',' + f.y)) &&
+              !slots.has(g.maze.start.x + ',' + g.maze.start.y) && g.startExits === startExits) cornerOk++
         } catch {
           /* retry budget expected sometimes */
         }
       }
     }
   }
-  check('corner maps generated', cornerOk >= 20, `ok=${cornerOk}/135`)
+  check('corner maps generated', cornerOk === 135, `ok=${cornerOk}/135`)
 }
 
 console.log('\n=== BFS/UCS/A* agree on generated corners ===')

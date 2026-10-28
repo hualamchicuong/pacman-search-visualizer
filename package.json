@@ -11,6 +11,7 @@
     "test:edge": "tsx scripts/edge-cases.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "~5.7.2",
     "vite": "^6.0.0"
   }
