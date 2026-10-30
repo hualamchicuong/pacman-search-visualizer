@@ -36,7 +36,7 @@ export function renderMetrics(container: HTMLElement, results: SearchResult[]): 
         <td>${m.pathCost ?? '—'}</td>
         <td>${m.timeMs}</td>
         <td>${terminationLabel(m)}</td>
-        <td>${meta.complete ? 'Yes*' : 'No'}</td>
+        <td>${meta.complete ? 'Yes' : 'No'}</td>
         <td>${optLabel(meta.optimal)}</td>
         <td>${traceNote}</td>
       </tr>`
@@ -52,7 +52,7 @@ export function renderMetrics(container: HTMLElement, results: SearchResult[]): 
           <th>Expanded</th>
           <th>Generated</th>
           <th>Cost</th>
-          <th>ms</th>
+          <th>ms (search)</th>
           <th>Stop</th>
           <th>Complete†</th>
           <th>Optimal†</th>
@@ -61,7 +61,7 @@ export function renderMetrics(container: HTMLElement, results: SearchResult[]): 
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    <p style="margin:0.45rem 0 0;font-size:0.72rem;color:var(--muted);">† Complete/Optimal = theoretical properties, not this run. OPEN/CLOSED on maze are position heatmaps.</p>
+    <p style="margin:0.45rem 0 0;font-size:0.72rem;color:var(--muted);">† Complete/Optimal = theoretical properties, not this run. ms (search) excludes trace snapshot time. OPEN/CLOSED on maze are position heatmaps.</p>
   `
 }
 
@@ -266,18 +266,3 @@ function recommendHtml(opts: {
   `
 }
 
-/** @deprecated use renderInsight */
-export function buildInsight(results: SearchResult[]): string {
-  if (results.length === 0) return 'Select algorithms and press Run to compare.'
-  if (results.length === 1) return singleInsight(results[0]!.metrics)
-  return 'See structured insight panel.'
-}
-
-function singleInsight(m: SearchMetrics): string {
-  const meta = ALGORITHM_META[m.algorithm]
-  const opt = optLabel(meta.optimal)
-  if (!m.found) {
-    return `${m.algorithm} did not find a solution (${terminationLabel(m)}, expanded ${m.nodesExpanded}).`
-  }
-  return `${m.algorithm}: path cost ${m.pathCost}, expanded ${m.nodesExpanded} nodes in ${m.timeMs} ms. Completeness (theory): yes. Optimality: ${opt}.`
-}

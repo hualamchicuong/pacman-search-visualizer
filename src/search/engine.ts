@@ -25,6 +25,20 @@ export interface EngineOptions {
   shouldCancel?: () => boolean
 }
 
+function cellKey(x: number, y: number): string {
+  return `${x},${y}`
+}
+
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0
+  return () => {
+    t += 0x6d2b79f5
+    let r = Math.imul(t ^ (t >>> 15), 1 | t)
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r)
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 /** Binary min-heap keyed by score(node); stable by insertion order on ties. */
 class MinHeap {
   private items: SearchNode[] = []
@@ -83,26 +97,19 @@ class MinHeap {
       i = best
     }
   }
-
-  snapshotCells(): Array<{ x: number; y: number }> {
-    const seen = new Set<string>()
-    const cells: Array<{ x: number; y: number }> = []
-    for (const n of this.items) {
-      const k = `${n.state.x},${n.state.y}`
-      if (!seen.has(k)) {
-        seen.add(k)
-        cells.push({ x: n.state.x, y: n.state.y })
-      }
-    }
-    return cells
-  }
 }
 
+/**
+ * Frontier with O(1) cell-count updates so OPEN snapshots stay O(#cells), not O(|OPEN|).
+ * Stale heap duplicates still decrement on pop (multiplicity tracks entries, not unique states).
+ */
 class Frontier {
   private fifo: SearchNode[] = []
   private fifoHead = 0
   private lifo: SearchNode[] = []
   private heap: MinHeap | null = null
+  /** cellKey → number of frontier entries at that board cell */
+  private cellCounts = new Map<string, number>()
 
   constructor(private kind: FrontierKind) {
     if (kind === 'ucs' || kind === 'greedy' || kind === 'astar') {
@@ -117,6 +124,7 @@ class Frontier {
   }
 
   push(node: SearchNode): void {
+    this.incCell(node.state.x, node.state.y)
     if (this.heap) {
       this.heap.push(node)
       return
@@ -126,31 +134,40 @@ class Frontier {
   }
 
   pop(): SearchNode | undefined {
-    if (this.heap) return this.heap.pop()
-    if (this.kind === 'lifo') return this.lifo.pop()
-    if (this.fifoHead >= this.fifo.length) return undefined
-    const n = this.fifo[this.fifoHead++]
-    // Occasional compact to free head slack
-    if (this.fifoHead > 256 && this.fifoHead * 2 > this.fifo.length) {
-      this.fifo = this.fifo.slice(this.fifoHead)
-      this.fifoHead = 0
+    let n: SearchNode | undefined
+    if (this.heap) n = this.heap.pop()
+    else if (this.kind === 'lifo') n = this.lifo.pop()
+    else {
+      if (this.fifoHead >= this.fifo.length) return undefined
+      n = this.fifo[this.fifoHead++]
+      if (this.fifoHead > 256 && this.fifoHead * 2 > this.fifo.length) {
+        this.fifo = this.fifo.slice(this.fifoHead)
+        this.fifoHead = 0
+      }
     }
+    if (n) this.decCell(n.state.x, n.state.y)
     return n
   }
 
   snapshotCells(): Array<{ x: number; y: number }> {
-    if (this.heap) return this.heap.snapshotCells()
-    const seen = new Set<string>()
     const cells: Array<{ x: number; y: number }> = []
-    const src = this.kind === 'lifo' ? this.lifo : this.fifo.slice(this.fifoHead)
-    for (const n of src) {
-      const k = `${n.state.x},${n.state.y}`
-      if (!seen.has(k)) {
-        seen.add(k)
-        cells.push({ x: n.state.x, y: n.state.y })
-      }
+    for (const k of this.cellCounts.keys()) {
+      const [xs, ys] = k.split(',')
+      cells.push({ x: Number(xs), y: Number(ys) })
     }
     return cells
+  }
+
+  private incCell(x: number, y: number): void {
+    const k = cellKey(x, y)
+    this.cellCounts.set(k, (this.cellCounts.get(k) ?? 0) + 1)
+  }
+
+  private decCell(x: number, y: number): void {
+    const k = cellKey(x, y)
+    const c = (this.cellCounts.get(k) ?? 0) - 1
+    if (c <= 0) this.cellCounts.delete(k)
+    else this.cellCounts.set(k, c)
   }
 
   private score(n: SearchNode): number {
@@ -174,32 +191,29 @@ function reconstruct(goal: SearchNode): { path: SearchNode[]; actions: Action[] 
   return { path, actions }
 }
 
-/** Collect unique board cells from full state keys "x,y,mask" */
-function closedCellsFrom(keys: Iterable<string>): Array<{ x: number; y: number }> {
-  const seen = new Set<string>()
-  const cells: Array<{ x: number; y: number }> = []
-  for (const key of keys) {
-    const parts = key.split(',')
-    const cellKey = `${parts[0]},${parts[1]}`
-    if (!seen.has(cellKey)) {
-      seen.add(cellKey)
-      cells.push({ x: Number(parts[0]), y: Number(parts[1]) })
-    }
+function closedCellsArray(cells: Set<string>): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = []
+  for (const k of cells) {
+    const [xs, ys] = k.split(',')
+    out.push({ x: Number(xs), y: Number(ys) })
   }
-  return cells
+  return out
 }
 
 /**
  * Reservoir-style trace: keep up to maxRecordedSteps expand events spread across the run.
  * Goal is always appended. Non-goal runs always pin the terminal expand.
- * `sourceStep` comes from caller (nodesExpanded); `seenExpands` is only for sampling odds.
+ * Uses seeded RNG so sampled playback is reproducible for a given run length.
  */
 class TraceRecorder {
   private expands: StepEvent[] = []
   private seenExpands = 0
   private sampled = false
+  private rand: () => number
 
-  constructor(private maxSteps: number) {}
+  constructor(private maxSteps: number, seed = 0x9e3779b9) {
+    this.rand = mulberry32(seed)
+  }
 
   /**
    * Advance expand counter; return true if this expand should be stored
@@ -209,7 +223,7 @@ class TraceRecorder {
     this.seenExpands++
     if (this.expands.length < this.maxSteps) return true
     this.sampled = true
-    return Math.random() < this.maxSteps / this.seenExpands
+    return this.rand() < this.maxSteps / this.seenExpands
   }
 
   storeExpand(
@@ -229,7 +243,7 @@ class TraceRecorder {
       this.expands.push(event)
       return
     }
-    const j = Math.floor(Math.random() * this.maxSteps)
+    const j = Math.floor(this.rand() * this.maxSteps)
     this.expands[j] = event
   }
 
@@ -290,10 +304,14 @@ type SearchCtx = {
   options: EngineOptions
   maze: Maze
   t0: number
+  /** Accumulated wall-clock spent on trace snapshots (excluded from timeMs) */
+  traceMs: number
   maxExpanded: number
   open: Frontier
   bestG: Map<string, number>
   closedKeys: Set<string>
+  /** Board cells that have been expanded at least once (heatmap projection) */
+  closedCells: Set<string>
   trace: TraceRecorder
   nodesExpanded: number
   nodesGenerated: number
@@ -320,15 +338,37 @@ function beginSearch(maze: Maze, options: EngineOptions): SearchCtx {
     options,
     maze,
     t0: performance.now(),
+    traceMs: 0,
     maxExpanded: options.maxExpanded ?? 150_000,
     open,
     bestG,
     closedKeys: new Set<string>(),
+    closedCells: new Set<string>(),
     trace: new TraceRecorder(options.maxRecordedSteps ?? 6_000),
     nodesExpanded: 0,
     nodesGenerated: 1,
     lastExpandedNode: null,
   }
+}
+
+/** Snapshot OPEN/CLOSED; cost charged to traceMs (not search timeMs). */
+function snapshotOpenClosed(ctx: SearchCtx): {
+  openCells: Array<{ x: number; y: number }>
+  closedCells: Array<{ x: number; y: number }>
+} {
+  const t = performance.now()
+  const openCells = ctx.open.snapshotCells()
+  const closedCells = closedCellsArray(ctx.closedCells)
+  ctx.traceMs += performance.now() - t
+  return { openCells, closedCells }
+}
+
+/**
+ * Only UCS / A* may improve a known state by better g (and reopen from CLOSED).
+ * BFS / DFS / Greedy skip any state already in OPEN ∪ CLOSED (textbook graph search).
+ */
+function allowGImprove(kind: FrontierKind): boolean {
+  return kind === 'ucs' || kind === 'astar'
 }
 
 /** One expansion step. Returns a finished result, or null to continue. */
@@ -343,19 +383,21 @@ function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null
   if (ctx.closedKeys.has(key)) return null
 
   ctx.closedKeys.add(key)
+  ctx.closedCells.add(cellKey(node.state.x, node.state.y))
   ctx.nodesExpanded++
 
   if (isGoal(node.state)) {
+    const snap = snapshotOpenClosed(ctx)
     const steps = ctx.trace.finishWithGoal(
       node,
-      ctx.open.snapshotCells(),
-      closedCellsFrom(ctx.closedKeys),
+      snap.openCells,
+      snap.closedCells,
       ctx.nodesExpanded,
     )
     return finish(
       ctx.options,
-      ctx.maze,
       ctx.t0,
+      ctx.traceMs,
       ctx.nodesExpanded,
       ctx.nodesGenerated,
       node,
@@ -365,15 +407,23 @@ function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null
     )
   }
 
+  const canImprove = allowGImprove(ctx.options.frontier)
+
   for (const { action, state, cost } of successors(ctx.maze, node.state)) {
     const childG = node.g + cost
     const childKey = stateKey(state)
     const prev = ctx.bestG.get(childKey)
-    if (prev !== undefined && childG >= prev) continue
-    if (ctx.closedKeys.has(childKey)) {
-      if (ctx.options.frontier === 'fifo' || ctx.options.frontier === 'lifo') continue
-      ctx.closedKeys.delete(childKey)
+
+    if (prev !== undefined) {
+      // Already in OPEN or CLOSED
+      if (!canImprove || childG >= prev) continue
+      // UCS / A*: better g — reopen if closed
+      if (ctx.closedKeys.has(childKey)) {
+        ctx.closedKeys.delete(childKey)
+        // Keep closedCells: heatmap = ever-expanded projection
+      }
     }
+
     ctx.bestG.set(childKey, childG)
     const h = ctx.options.useHeuristic ? heuristic(ctx.maze, state) : 0
     ctx.open.push({
@@ -391,12 +441,8 @@ function stepSearch(ctx: SearchCtx): SearchResult | 'cancelled' | 'limit' | null
 
   // Snapshot OPEN/CLOSED only when this expand is kept in the reservoir
   if (ctx.trace.acceptExpand()) {
-    ctx.trace.storeExpand(
-      node,
-      ctx.open.snapshotCells(),
-      closedCellsFrom(ctx.closedKeys),
-      ctx.nodesExpanded,
-    )
+    const snap = snapshotOpenClosed(ctx)
+    ctx.trace.storeExpand(node, snap.openCells, snap.closedCells, ctx.nodesExpanded)
   }
 
   if (ctx.nodesExpanded >= ctx.maxExpanded) return 'limit'
@@ -410,29 +456,32 @@ function endSearch(
 ): SearchResult {
   let steps: StepEvent[]
   if (goalNode && termination === 'goal') {
+    const snap = snapshotOpenClosed(ctx)
     steps = ctx.trace.finishWithGoal(
       goalNode,
-      ctx.open.snapshotCells(),
-      closedCellsFrom(ctx.closedKeys),
+      snap.openCells,
+      snap.closedCells,
       ctx.nodesExpanded,
     )
   } else {
     // One terminal snapshot at stop (limit / exhausted / cancelled) if missing from reservoir
-    const terminal: StepEvent | null = ctx.lastExpandedNode
-      ? {
-          kind: 'expand',
-          node: ctx.lastExpandedNode,
-          openCells: ctx.open.snapshotCells(),
-          closedCells: closedCellsFrom(ctx.closedKeys),
-          sourceStep: ctx.nodesExpanded,
-        }
-      : null
+    let terminal: StepEvent | null = null
+    if (ctx.lastExpandedNode) {
+      const snap = snapshotOpenClosed(ctx)
+      terminal = {
+        kind: 'expand',
+        node: ctx.lastExpandedNode,
+        openCells: snap.openCells,
+        closedCells: snap.closedCells,
+        sourceStep: ctx.nodesExpanded,
+      }
+    }
     steps = ctx.trace.finishWithoutGoal(terminal)
   }
   return finish(
     ctx.options,
-    ctx.maze,
     ctx.t0,
+    ctx.traceMs,
     ctx.nodesExpanded,
     ctx.nodesGenerated,
     goalNode,
@@ -458,6 +507,7 @@ export function runSearch(maze: Maze, options: EngineOptions): SearchResult {
 /**
  * Async search for Web Worker: yields every `yieldEvery` expands so cancel
  * messages can be processed on the worker event loop.
+ * Yield wall-clock is excluded from search timeMs (paused between expands).
  */
 export async function runSearchAsync(
   maze: Maze,
@@ -470,7 +520,10 @@ export async function runSearchAsync(
     const out = stepSearch(ctx)
     if (out === null) {
       if (ctx.nodesExpanded > 0 && ctx.nodesExpanded % yieldEvery === 0) {
+        // Pause the search timer across the yield so timeMs stays pure search
+        const pauseStart = performance.now()
         await yieldMacrotask()
+        ctx.t0 += performance.now() - pauseStart
         if (ctx.options.shouldCancel?.()) return endSearch(ctx, 'cancelled')
       }
       continue
@@ -483,8 +536,8 @@ export async function runSearchAsync(
 
 function finish(
   options: EngineOptions,
-  _maze: Maze,
   t0: number,
+  traceMs: number,
   nodesExpanded: number,
   nodesGenerated: number,
   goalNode: SearchNode | null,
@@ -492,7 +545,8 @@ function finish(
   termination: TerminationReason,
   traceStats: { sampled: boolean; recorded: number; seen: number },
 ): SearchResult {
-  const timeMs = performance.now() - t0
+  const wallMs = performance.now() - t0
+  const searchMs = Math.max(0, wallMs - traceMs)
   const meta = ALGORITHM_META[options.algorithm]
   const { path, actions } = goalNode
     ? reconstruct(goalNode)
@@ -503,8 +557,8 @@ function finish(
     nodesExpanded,
     nodesGenerated,
     pathCost: goalNode ? goalNode.g : null,
-    depth: goalNode ? goalNode.g : null,
-    timeMs: Math.round(timeMs * 100) / 100,
+    timeMs: Math.round(searchMs * 100) / 100,
+    traceMs: Math.round(traceMs * 100) / 100,
     found: goalNode !== null,
     complete: meta.complete,
     optimal: meta.optimal,

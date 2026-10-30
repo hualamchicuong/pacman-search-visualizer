@@ -74,7 +74,11 @@
                 <option value="4" selected>4 paths</option>
               </select>
             </label>
-            <p class="gen-hint" id="gen-hint">Max foods: 20 (open cells − 1, cap 20)</p>
+            <label class="field">
+              <span>Seed (optional)</span>
+              <input id="gen-seed" type="number" placeholder="random" step="1" />
+            </label>
+            <p class="gen-hint" id="gen-hint">Max foods: 20 (open cells − 3, cap 20)</p>
             <button type="button" id="btn-generate" class="btn btn-block">Generate map</button>
             <p class="gen-status" id="gen-status" role="status" aria-live="polite" hidden></p>
           </div>

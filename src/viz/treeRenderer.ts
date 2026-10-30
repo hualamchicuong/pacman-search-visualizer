@@ -100,7 +100,7 @@ export class TreeRenderer {
     t.textContent = message
     this.world.appendChild(t)
     this.captionEl.textContent =
-      `Cây khám phá (≤${MAX_TREE_NODES} nút đầu + path/goal nếu có) · zoom/kéo · double-click = fit`
+      `Cây khám phá — chỉ nút đã expand (≤${MAX_TREE_NODES} đầu + path/goal) · zoom/kéo · double-click = fit`
   }
 
   /** True after user pan/zoom — callers should preserve view during playback. */
@@ -174,7 +174,7 @@ export class TreeRenderer {
       ? ` · hiển thị ≤${MAX_TREE_NODES} nút khám phá đầu (+ path)`
       : ''
     this.captionEl.textContent =
-      `${nodes.length} nút · ${mode}${capNote} · cam = path · double-click fit`
+      `${nodes.length} nút (đã expand, chưa vẽ lá OPEN) · ${mode}${capNote} · cam = path · double-click fit`
   }
 
   setHighlight(highlightId: string | null): void {

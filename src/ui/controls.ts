@@ -25,6 +25,8 @@ export interface GenerateFormState {
   foodCount: number
   startExits: 2 | 3 | 4
   foodsAtCorners: boolean
+  /** Explicit seed when set; omit for random */
+  seed?: number
 }
 
 function fillSelect(el: HTMLSelectElement, values: string[], selected?: string): void {
@@ -62,6 +64,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     genFoods: HTMLInputElement
     genCorners: HTMLInputElement
     genExits: HTMLSelectElement
+    genSeed: HTMLInputElement
     genHint: HTMLElement
     genStatus: HTMLElement
     runStatus: HTMLElement
@@ -89,6 +92,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
   const genFoods = document.querySelector('#gen-foods') as HTMLInputElement
   const genCorners = document.querySelector('#gen-corners') as HTMLInputElement
   const genExits = document.querySelector('#gen-exits') as HTMLSelectElement
+  const genSeed = document.querySelector('#gen-seed') as HTMLInputElement
   const genHint = document.querySelector('#gen-hint') as HTMLElement
   const genStatus = document.querySelector('#gen-status') as HTMLElement
   const runStatus = document.querySelector('#run-status') as HTMLElement
@@ -113,12 +117,21 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     speed: Number(speedRange.value),
   })
 
-  const getGenerate = (): GenerateFormState => ({
-    size: genSize.value as MapSizeId,
-    foodCount: genCorners.checked ? 4 : Number(genFoods.value),
-    startExits: Number(genExits.value) as 2 | 3 | 4,
-    foodsAtCorners: genCorners.checked,
-  })
+  const getGenerate = (): GenerateFormState => {
+    const seedRaw = genSeed.value.trim()
+    const seedParsed = seedRaw === '' ? undefined : Number(seedRaw)
+    const seed =
+      seedParsed !== undefined && Number.isFinite(seedParsed)
+        ? (seedParsed | 0)
+        : undefined
+    return {
+      size: genSize.value as MapSizeId,
+      foodCount: genCorners.checked ? 4 : Number(genFoods.value),
+      startExits: Number(genExits.value) as 2 | 3 | 4,
+      foodsAtCorners: genCorners.checked,
+      seed,
+    }
+  }
 
   const setSearchBusy = (busy: boolean, status?: string): void => {
     btnRun.disabled = busy
@@ -171,7 +184,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     if (Number(genFoods.value) > max) genFoods.value = String(max)
     if (Number(genFoods.value) < 1) genFoods.value = '1'
     setGenerateHint(
-      `Max foods for ${size}: ${max} (geometric upper bound ≤ open−1, cap 20). Dense walls may make high counts fail — try fewer foods.`,
+      `Max foods for ${size}: ${max} (≤ interior−3, cap 20). Optional seed for reproducibility.`,
     )
   }
 
@@ -206,6 +219,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
     setGenerateStatus('', 'clear')
   })
   genExits.addEventListener('change', () => setGenerateStatus('', 'clear'))
+  genSeed.addEventListener('input', () => setGenerateStatus('', 'clear'))
 
   syncFoodLimits()
   syncMode(false)
@@ -238,6 +252,7 @@ export function bindControls(onChange?: (s: ControlState) => void): {
       genFoods,
       genCorners,
       genExits,
+      genSeed,
       genHint,
       genStatus,
       runStatus,

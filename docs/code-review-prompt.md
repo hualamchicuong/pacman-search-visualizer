@@ -19,15 +19,17 @@ Live (GitHub Pages): https://hualamchicuong.github.io/pacman-search-visualizer/
 | Khu vực | Vai trò |
 |:---|:---|
 | `src/core/` | `maze.ts` parser; `problem.ts` successors/goal/cost; `types.ts` |
-| `src/search/` | Engine chung BFS/DFS/UCS/Greedy/A*; `heuristic.ts` (nearest Manhattan + MST) |
-| `src/maps/` | Map built-in (`tiny`/`small`/`medium`/`branchy`); `generate.ts` gen map tùy chọn |
+| `src/search/` | Engine chung BFS/DFS/UCS/Greedy/A*; `heuristic.ts` (nearest Manhattan + MST); `options.ts`; `worker.ts` + `searchClient.ts` (Web Worker) |
+| `src/maps/` | Map built-in (`tiny`/`small`/`medium`/`branchy`); `generate.ts` gen map tùy chọn (seed, corners) |
 | `src/viz/` | Canvas maze, search tree SVG (pan/zoom/fit), `TracePlayer` |
 | `src/ui/` | Controls, metrics table, structured Insight (VI) |
 | `src/main.ts`, `index.html`, `src/style.css` | Wiring + layout |
-| `docs/state-space.md` | Báo cáo lý thuyết |
+| `docs/state-space.md` | Báo cáo lý thuyết (rubric 5 phần) |
 | `docs/code-review-prompt.md` | Prompt này |
-| `scripts/verify-algorithms.ts` | Smoke đúng thuật toán |
-| `.github/workflows/deploy-pages.yml` | Deploy Pages với `VITE_BASE=/pacman-search-visualizer/` |
+| `scripts/verify-algorithms.ts` | Verify đúng thuật toán + h consistent |
+| `scripts/edge-cases.ts` | Edge cases / generator / tree |
+| `scripts/smoke.ts` | Smoke nhanh |
+| `.github/workflows/deploy-pages.yml` | Verify + edge + Deploy Pages (`VITE_BASE=/pacman-search-visualizer/`) |
 
 ## Tính năng UI hiện có (phải review đúng với bản này)
 

@@ -183,7 +183,7 @@ console.log('\n=== Tree path inject on capped maps ===')
   }
 }
 
-console.log('\n=== M1 Greedy reopen tree (seed=24 corners) ===')
+console.log('\n=== Greedy tree integrity (seed=24 corners, no g-reopen) ===')
 {
   try {
     const g = generateMaze({
@@ -284,26 +284,31 @@ console.log('\n=== Generator connectivity + corners ===')
     `ok=${genOk} fail=${genFail} disconnectSeen=${disconnect}`,
   )
 
-  // High food on tiny often fails — should throw cleanly, not return disconnected
-  let highFail = 0
-  let highOk = 0
-  for (let seed = 0; seed < 30; seed++) {
-    try {
-      const generated = generateMaze({ size: 'tiny', foodCount: 14, startExits: 2, seed })
-      check('high food success respects constraints',
-        connectedMaze(generated.maze) && generated.maze.foods.length === 14)
-      highOk++
-    } catch (err) {
-      check('high food fails with actionable GenerateError',
-        err instanceof GenerateError && /100 tries/.test(err.message))
-      highFail++
+  // maxFoodForSize must succeed ≥90% across seeds × exits
+  for (const size of sizes) {
+    const max = maxFoodForSize(size)
+    let okAtMax = 0
+    let totalAtMax = 0
+    for (const startExits of exits) {
+      for (let seed = 0; seed < 20; seed++) {
+        totalAtMax++
+        try {
+          const generated = generateMaze({ size, foodCount: max, startExits, seed })
+          if (connectedMaze(generated.maze) && generated.maze.foods.length === max) okAtMax++
+        } catch (err) {
+          if (!(err instanceof GenerateError)) {
+            check(`${size} max-food unexpected error`, false, String(err))
+          }
+        }
+      }
     }
+    const rate = okAtMax / totalAtMax
+    check(
+      `${size} food=max(${max}) success ≥90%`,
+      rate >= 0.9,
+      `ok=${okAtMax}/${totalAtMax} (${(rate * 100).toFixed(0)}%)`,
+    )
   }
-  check(
-    'tiny food=14 either fails cleanly or succeeds',
-    highOk + highFail === 30,
-    `ok=${highOk} fail=${highFail}`,
-  )
 
   // Corners
   let cornerOk = 0

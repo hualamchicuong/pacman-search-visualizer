@@ -39,8 +39,10 @@ export interface SearchMetrics {
   nodesExpanded: number
   nodesGenerated: number
   pathCost: number | null
-  depth: number | null
+  /** Pure search wall time (excludes trace snapshot + async yield) */
   timeMs: number
+  /** Time spent building OPEN/CLOSED snapshots for playback */
+  traceMs: number
   found: boolean
   /** Theoretical completeness (from ALGORITHM_META), not this run */
   complete: boolean

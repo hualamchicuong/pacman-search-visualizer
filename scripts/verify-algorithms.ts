@@ -1,5 +1,5 @@
 /**
- * Independent verification of search solvers vs a clean reference BFS.
+ * Independent verification of search solvers vs clean reference implementations.
  * Run: npx tsx scripts/verify-algorithms.ts
  */
 import { MAPS } from '../src/maps'
@@ -8,6 +8,7 @@ import { heuristic } from '../src/search/heuristic'
 import { initialState, isGoal, successors } from '../src/core/problem'
 import { stateKey, type State } from '../src/core/types'
 import type { Maze } from '../src/core/maze'
+import { generateMaze } from '../src/maps/generate'
 import { buildSearchTree, flattenTree } from '../src/viz/searchTree'
 
 /** Reference BFS — minimal steps, graph-search, no shared engine code */
@@ -31,66 +32,122 @@ function referenceBfs(maze: Maze): { cost: number; expanded: number } | null {
   return null
 }
 
-/** Sample admissibility: h(n) <= true remaining cost from n (via ref BFS from that state). */
-function checkAdmissibleSample(maze: Maze, samples: number): {
-  checked: number
-  violations: number
-  worstGap: number
-} {
-  // BFS from start collecting some CLOSED states
+/**
+ * Textbook Greedy Best-First: OPEN by min h; skip any child already in OPEN ∪ CLOSED.
+ * No g-based reopen (matches course definition).
+ */
+function referenceGreedy(maze: Maze): { cost: number; expanded: number } | null {
   const start = initialState(maze)
-  const q: State[] = [start]
+  type Item = { s: State; g: number; h: number; seq: number }
+  const open: Item[] = [{ s: start, g: 0, h: heuristic(maze, start), seq: 0 }]
   const seen = new Set<string>([stateKey(start)])
-  const states: State[] = []
-  let qi = 0
-  while (qi < q.length && states.length < samples * 3) {
-    const s = q[qi++]!
-    if (!isGoal(s)) states.push(s)
-    for (const { state } of successors(maze, s)) {
+  let seq = 1
+  let expanded = 0
+  while (open.length) {
+    open.sort((a, b) => a.h - b.h || a.seq - b.seq)
+    const n = open.shift()!
+    expanded++
+    if (isGoal(n.s)) return { cost: n.g, expanded }
+    for (const { state } of successors(maze, n.s)) {
       const k = stateKey(state)
       if (seen.has(k)) continue
       seen.add(k)
-      q.push(state)
-    }
-  }
-
-  // Pick evenly spaced samples
-  const picked: State[] = []
-  const step = Math.max(1, Math.floor(states.length / samples))
-  for (let i = 0; i < states.length && picked.length < samples; i += step) {
-    picked.push(states[i]!)
-  }
-
-  let violations = 0
-  let worstGap = 0
-  for (const s of picked) {
-    const h = heuristic(maze, s)
-    // True remaining: BFS from this state as "start" with same food mask
-    const trueCost = bfsFrom(maze, s)
-    if (trueCost === null) continue
-    if (h > trueCost + 1e-9) {
-      violations++
-      worstGap = Math.max(worstGap, h - trueCost)
-    }
-  }
-  return { checked: picked.length, violations, worstGap }
-}
-
-function bfsFrom(maze: Maze, start: State): number | null {
-  const q: Array<{ s: State; g: number }> = [{ s: start, g: 0 }]
-  const seen = new Set<string>([stateKey(start)])
-  let qi = 0
-  while (qi < q.length) {
-    const { s, g } = q[qi++]!
-    if (isGoal(s)) return g
-    for (const { state } of successors(maze, s)) {
-      const k = stateKey(state)
-      if (seen.has(k)) continue
-      seen.add(k)
-      q.push({ s: state, g: g + 1 })
+      open.push({ s: state, g: n.g + 1, h: heuristic(maze, state), seq: seq++ })
     }
   }
   return null
+}
+
+/** Textbook DFS graph search: LIFO; skip OPEN ∪ CLOSED */
+function referenceDfs(maze: Maze): { cost: number; expanded: number } | null {
+  const start = initialState(maze)
+  const stack: Array<{ s: State; g: number }> = [{ s: start, g: 0 }]
+  const seen = new Set<string>([stateKey(start)])
+  let expanded = 0
+  while (stack.length) {
+    const n = stack.pop()!
+    expanded++
+    if (isGoal(n.s)) return { cost: n.g, expanded }
+    for (const { state } of successors(maze, n.s)) {
+      const k = stateKey(state)
+      if (seen.has(k)) continue
+      seen.add(k)
+      stack.push({ s: state, g: n.g + 1 })
+    }
+  }
+  return null
+}
+
+/** Exhaustive admissibility + consistency over all reachable states/edges. */
+function checkHeuristicProperties(maze: Maze): {
+  states: number
+  edges: number
+  admitViol: number
+  consistViol: number
+  goalHViol: number
+} {
+  const start = initialState(maze)
+  const q: State[] = [start]
+  const seen = new Set<string>([stateKey(start)])
+  let edges = 0
+  let admitViol = 0
+  let consistViol = 0
+  let goalHViol = 0
+  let qi = 0
+
+  // True remaining cost via BFS from each state (computed lazily)
+  const trueCost = new Map<string, number | null>()
+  const bfsFrom = (s0: State): number | null => {
+    const k0 = stateKey(s0)
+    if (trueCost.has(k0)) return trueCost.get(k0)!
+    const qq: Array<{ s: State; g: number }> = [{ s: s0, g: 0 }]
+    const vis = new Set<string>([k0])
+    let i = 0
+    while (i < qq.length) {
+      const { s, g } = qq[i++]!
+      if (isGoal(s)) {
+        trueCost.set(k0, g)
+        return g
+      }
+      for (const { state } of successors(maze, s)) {
+        const k = stateKey(state)
+        if (vis.has(k)) continue
+        vis.add(k)
+        qq.push({ s: state, g: g + 1 })
+      }
+    }
+    trueCost.set(k0, null)
+    return null
+  }
+
+  while (qi < q.length) {
+    const s = q[qi++]!
+    const h = heuristic(maze, s)
+    if (isGoal(s)) {
+      if (h !== 0) goalHViol++
+    } else {
+      const tc = bfsFrom(s)
+      if (tc !== null && h > tc + 1e-9) admitViol++
+    }
+    for (const { state, cost } of successors(maze, s)) {
+      edges++
+      const hp = heuristic(maze, state)
+      if (h > cost + hp + 1e-9) consistViol++
+      const k = stateKey(state)
+      if (!seen.has(k)) {
+        seen.add(k)
+        q.push(state)
+      }
+    }
+  }
+
+  return {
+    states: seen.size,
+    edges,
+    admitViol,
+    consistViol,
+    goalHViol,
+  }
 }
 
 let failed = 0
@@ -133,7 +190,7 @@ for (const mapId of Object.keys(MAPS)) {
       }
     }
     console.log(
-      `  ${algo.padEnd(7)} cost=${cost} exp=${r.metrics.nodesExpanded} → ${status}`,
+      `  ${algo.padEnd(7)} cost=${cost} exp=${r.metrics.nodesExpanded} gen=${r.metrics.nodesGenerated} ms=${r.metrics.timeMs} → ${status}`,
     )
   }
 
@@ -145,11 +202,34 @@ for (const mapId of Object.keys(MAPS)) {
     failed++
   }
 
-  const adm = checkAdmissibleSample(maze, 25)
+  // Textbook Greedy / DFS must match engine exactly
+  const greedy = solve(maze, 'Greedy')
+  const refG = referenceGreedy(maze)
+  if (!refG || greedy.metrics.pathCost !== refG.cost || greedy.metrics.nodesExpanded !== refG.expanded) {
+    console.log(
+      `  FAIL Greedy vs textbook: app cost=${greedy.metrics.pathCost} exp=${greedy.metrics.nodesExpanded} ref cost=${refG?.cost} exp=${refG?.expanded}`,
+    )
+    failed++
+  } else {
+    console.log(`  Greedy matches textbook (cost=${refG.cost} exp=${refG.expanded})`)
+  }
+
+  const dfs = solve(maze, 'DFS')
+  const refD = referenceDfs(maze)
+  if (!refD || dfs.metrics.pathCost !== refD.cost || dfs.metrics.nodesExpanded !== refD.expanded) {
+    console.log(
+      `  FAIL DFS vs textbook: app cost=${dfs.metrics.pathCost} exp=${dfs.metrics.nodesExpanded} ref cost=${refD?.cost} exp=${refD?.expanded}`,
+    )
+    failed++
+  } else {
+    console.log(`  DFS matches textbook (cost=${refD.cost} exp=${refD.expanded})`)
+  }
+
+  const heur = checkHeuristicProperties(maze)
   console.log(
-    `  Heuristic admissibility samples: checked=${adm.checked} violations=${adm.violations} worstGap=${adm.worstGap}`,
+    `  Heuristic: states=${heur.states} edges=${heur.edges} admitViol=${heur.admitViol} consistViol=${heur.consistViol} goalHViol=${heur.goalHViol}`,
   )
-  if (adm.violations > 0) failed++
+  if (heur.admitViol > 0 || heur.consistViol > 0 || heur.goalHViol > 0) failed++
 
   // Tree: exploration-order layout; solution chain injected when found
   const tree = buildSearchTree(bfs)
@@ -161,7 +241,6 @@ for (const mapId of Object.keys(MAPS)) {
       console.log('  FAIL tree missing goal after inject')
       failed++
     }
-    // Path validity: successive path states differ by one move
     for (let i = 1; i < bfs.path.length; i++) {
       const a = bfs.path[i - 1]!.state
       const b = bfs.path[i]!.state
@@ -175,6 +254,51 @@ for (const mapId of Object.keys(MAPS)) {
     console.log(
       `  Tree: nodes=${nodes.length} pathNodes=${pathNodes.length} hasGoal=${hasGoal} (exploration order + path inject)`,
     )
+  }
+}
+
+// Generated maps: Greedy / DFS must match textbook on ~50 seeds
+console.log('\n=== Generated maps: textbook Greedy/DFS match ===')
+{
+  let compared = 0
+  for (let seed = 0; seed < 80 && compared < 50; seed++) {
+    try {
+      const g = generateMaze({
+        size: seed % 2 === 0 ? 'small' : 'medium',
+        foodCount: 4 + (seed % 3),
+        startExits: ((seed % 3) + 2) as 2 | 3 | 4,
+        foodsAtCorners: seed % 5 === 0,
+        seed,
+      })
+      const appG = solve(g.maze, 'Greedy')
+      const refG = referenceGreedy(g.maze)
+      const appD = solve(g.maze, 'DFS')
+      const refD = referenceDfs(g.maze)
+      compared++
+      if (
+        !refG ||
+        appG.metrics.pathCost !== refG.cost ||
+        appG.metrics.nodesExpanded !== refG.expanded
+      ) {
+        console.log(`  FAIL Greedy seed=${seed}`)
+        failed++
+      }
+      if (
+        !refD ||
+        appD.metrics.pathCost !== refD.cost ||
+        appD.metrics.nodesExpanded !== refD.expanded
+      ) {
+        console.log(`  FAIL DFS seed=${seed}`)
+        failed++
+      }
+    } catch {
+      /* skip failed gens */
+    }
+  }
+  console.log(`  Compared ${compared} generated maps`)
+  if (compared < 40) {
+    console.log('  FAIL fewer than 40 generated comparisons')
+    failed++
   }
 }
 

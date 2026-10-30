@@ -24,8 +24,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run verify
-      - run: npm run test:edge
+      - name: Verify algorithms
+        run: npm run verify
+      - name: Edge-case tests
+        run: npm run test:edge
       - name: Build
         env:
           VITE_BASE: /pacman-search-visualizer/

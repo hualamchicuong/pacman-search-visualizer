@@ -71,9 +71,13 @@ export function maxOpenCells(size: MapSizeId): number {
   return Math.max(0, (width - 2) * (height - 2))
 }
 
-/** Practical food cap: bitmask limit + leave room for Pac-man cell. */
+/**
+ * Practical food cap: leave room for Pac-man + a few corridor cells after
+ * sparse walls / forceExits carving. Cap 20 (bitmask).
+ * `interior - 3` is reachable for tiny/small/medium with adaptive wall density.
+ */
 export function maxFoodForSize(size: MapSizeId): number {
-  return Math.min(20, Math.max(1, maxOpenCells(size) - 1))
+  return Math.min(20, Math.max(1, maxOpenCells(size) - 3))
 }
 
 function mulberry32(seed: number): () => number {
@@ -197,7 +201,7 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
 
   const maxAttempts = 100
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    let walls = buildSparseWalls(w, h, rand)
+    let walls = buildSparseWalls(w, h, rand, foodCount)
 
     // Corner-food maps: force the four corner cells open
     if (foodsAtCorners) {
@@ -309,8 +313,16 @@ export function generateMaze(options: GenerateOptions): GenerateResult {
   )
 }
 
-/** Border walls + random internal wall cells, keeping the interior mostly connected. */
-function buildSparseWalls(w: number, h: number, rand: () => number): boolean[][] {
+/**
+ * Border walls + random internal wall cells, keeping the interior mostly connected.
+ * Caps wall density so at least foodCount + 3 open interior cells remain for start / foods / exits.
+ */
+function buildSparseWalls(
+  w: number,
+  h: number,
+  rand: () => number,
+  foodCount: number,
+): boolean[][] {
   const walls: boolean[][] = []
   for (let y = 0; y < h; y++) {
     walls[y] = []
@@ -319,9 +331,11 @@ function buildSparseWalls(w: number, h: number, rand: () => number): boolean[][]
     }
   }
 
-  // Density scales with size — leave enough open for foods / junctions
   const interior = (w - 2) * (h - 2)
-  const targetWalls = Math.floor(interior * (0.22 + rand() * 0.12))
+  // Leave headroom for Pac-man, foods, and forceExits carving
+  const maxWallsByFood = Math.max(0, interior - foodCount - 3)
+  const densityTarget = Math.floor(interior * (0.22 + rand() * 0.12))
+  const targetWalls = Math.min(densityTarget, maxWallsByFood)
   let placed = 0
   let guard = 0
   while (placed < targetWalls && guard < interior * 8) {

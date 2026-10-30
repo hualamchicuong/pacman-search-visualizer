@@ -65,15 +65,8 @@ export function setCustomMap(maze: Maze): void {
   MAPS.custom = customMaze
 }
 
-export function hasCustomMap(): boolean {
-  return customMaze !== null
-}
-
 export function listMapIds(): string[] {
   const ids = [...Object.keys(BUILTIN)]
   if (customMaze) ids.push('custom')
   return ids
 }
-
-/** Built-in ids only (dropdown seed). Prefer listMapIds() after generate. */
-export const MAP_IDS = Object.keys(BUILTIN)

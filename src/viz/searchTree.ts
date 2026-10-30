@@ -34,10 +34,16 @@ function shortLabel(n: SearchNode): string {
   return `(${n.state.x},${n.state.y})`
 }
 
-function subLabel(n: SearchNode, informed: boolean): string {
-  const foods = bitCount(n.state.foodMask)
-  if (informed) return `g=${n.g}  h=${n.h.toFixed(0)}  F${foods}`
-  return `g=${n.g}  F${foods}`
+/** Binary food bitmask, zero-padded to `width` bits (same (x,y) + different F stay distinct). */
+function foodMaskLabel(mask: number, width: number): string {
+  const w = Math.max(1, Math.min(width, 12))
+  return (mask >>> 0).toString(2).padStart(w, '0')
+}
+
+function subLabel(n: SearchNode, informed: boolean, foodBits: number): string {
+  const maskBits = foodMaskLabel(n.state.foodMask, foodBits)
+  if (informed) return `g=${n.g} h=${n.h.toFixed(0)} F=${maskBits}`
+  return `g=${n.g} F=${maskBits}`
 }
 
 /** Strict best-g filtering makes state + g unique for each accepted occurrence. */
@@ -89,21 +95,35 @@ export function buildSearchTree(
   if (includeSolution && result.found && result.path.length) {
     ensure(result.path[result.path.length - 1]!, lastStep)
   }
-  const root = [...byId.values()].find(n => !n.parent)
+  const root = [...byId.values()].find((n) => !n.parent)
   if (!root) return null
+
+  // Bit-width of food mask so F= labels align across nodes
+  let foodBits = 1
+  for (const n of byId.values()) {
+    const m = n.state.foodMask >>> 0
+    let w = 0
+    let t = m
+    while (t) {
+      w++
+      t >>>= 1
+    }
+    foodBits = Math.max(foodBits, w, bitCount(m))
+  }
+
   const build = (id: string, depth: number): TreeNode => {
     const n = byId.get(id)!
     return {
       id,
       label: shortLabel(n),
-      sublabel: subLabel(n, informed),
+      sublabel: subLabel(n, informed, foodBits),
       g: n.g,
       h: n.h,
       onPath: pathIds.has(id),
       isGoal: id === goalId,
       isRoot: depth === 0,
       discoveredAt: discoveredAt.get(id) ?? 0,
-      children: (children.get(id) ?? []).map(child => build(child, depth + 1)),
+      children: (children.get(id) ?? []).map((child) => build(child, depth + 1)),
       x: 0,
       y: 0,
       depth,
